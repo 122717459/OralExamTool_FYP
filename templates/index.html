@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Oral Exam Tool – Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+    textarea { width: 100%; height: 140px; }
+    input, button, textarea { font-size: 1rem; margin-top: .5rem; }
+    .row { margin: 1rem 0; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; }
+    .muted { color: #666; font-size: .9rem; }
+    pre { white-space: pre-wrap; word-wrap: break-word; }
+  </style>
+</head>
+<body>
+  <h1>Oral Exam Tool – Demo</h1>
+  <p class="muted">Paste a transcript (what the student said) and an optional question prompt. Click “Get Feedback”.</p>
+
+  <div class="card">
+    <div class="row">
+      <label>Question (optional):</label>
+      <input id="prompt" type="text" placeholder="e.g., Introduce yourself." />
+    </div>
+
+    <div class="row">
+      <label>Transcript (required):</label>
+      <textarea id="transcript" placeholder="Paste the student's spoken answer here..."></textarea>
+    </div>
+
+    <div class="row">
+      <button id="go">Get Feedback</button>
+      <span id="status" class="muted" style="margin-left: 1rem;"></span>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:1rem;">
+    <h2>AI Feedback</h2>
+    <pre id="output">(nothing yet)</pre>
+  </div>
+
+  <script>
+    const goBtn = document.getElementById('go');
+    const statusEl = document.getElementById('status');
+    const outEl = document.getElementById('output');
+
+    goBtn.addEventListener('click', async () => {
+      const prompt = document.getElementById('prompt').value.trim();
+      const transcript = document.getElementById('transcript').value.trim();
+
+      if (!transcript) {
+        outEl.textContent = "Please paste a transcript first.";
+        return;
+      }
+
+      statusEl.textContent = "Working...";
+      outEl.textContent = "";
+
+      try {
+        const res = await fetch('/api/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transcript, prompt })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          outEl.textContent = "Error: " + (data.error || "Unknown error");
+        } else {
+          outEl.textContent = data.feedback || "(no feedback returned)";
+        }
+      } catch (err) {
+        outEl.textContent = "Network error: " + err.message;
+      } finally {
+        statusEl.textContent = "";
+      }
+    });
+  </script>
+</body>
+</html>

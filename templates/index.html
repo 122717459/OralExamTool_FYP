@@ -2,80 +2,214 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Oral Exam Tool – Demo</title>
+  <title>Oral Exam Tool – Simple</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
-    textarea { width: 100%; height: 140px; }
-    input, button, textarea { font-size: 1rem; margin-top: .5rem; }
+    body { font-family: system-ui, sans-serif; max-width: 680px; margin: 2rem auto; padding: 0 1rem; }
+    button, select { font-size: 1rem; padding: .6rem .9rem; margin-right: .5rem; }
     .row { margin: 1rem 0; }
-    .card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; }
-    .muted { color: #666; font-size: .9rem; }
-    pre { white-space: pre-wrap; word-wrap: break-word; }
+    .box { border: 1px solid #ddd; border-radius: 8px; padding: .75rem; background:#fff; min-height: 2.2rem; }
+    .muted { color:#666; font-size:.95rem; }
+    .ok { color:#0a0; }
+    .err { color:#b00; }
   </style>
 </head>
 <body>
-  <h1>Oral Exam Tool – Demo</h1>
-  <p class="muted">Paste a transcript (what the student said) and an optional question prompt. Click “Get Feedback”.</p>
+  <h1>Oral Exam Tool – Simple</h1>
+  <p class="muted">Flow: Start → Stop → Transcribe (STT) → Get Feedback → Speak (TTS).</p>
 
-  <div class="card">
-    <div class="row">
-      <label>Question (optional):</label>
-      <input id="prompt" type="text" placeholder="e.g., Introduce yourself." />
-    </div>
-
-    <div class="row">
-      <label>Transcript (required):</label>
-      <textarea id="transcript" placeholder="Paste the student's spoken answer here..."></textarea>
-    </div>
-
-    <div class="row">
-      <button id="go">Get Feedback</button>
-      <span id="status" class="muted" style="margin-left: 1rem;"></span>
-    </div>
+  <div class="row">
+    <button id="startBtn">🎙️ Start Recording</button>
+    <button id="stopBtn" disabled>⏹️ Stop & Process</button>
+    <select id="lang">
+      <option value="en-GB" selected>English (UK)</option>
+      <!-- add more later if you like -->
+    </select>
   </div>
 
-  <div class="card" style="margin-top:1rem;">
-    <h2>AI Feedback</h2>
-    <pre id="output">(nothing yet)</pre>
+  <div class="row muted" id="status">Idle.</div>
+
+  <div class="row">
+    <strong>Transcript</strong>
+    <div id="transcript" class="box"></div>
+  </div>
+
+  <div class="row">
+    <strong>Feedback</strong>
+    <div id="feedback" class="box"></div>
+  </div>
+
+  <div class="row">
+    <audio id="player" controls style="width:100%;"></audio>
   </div>
 
   <script>
-    const goBtn = document.getElementById('go');
+    // ---------- Elements ----------
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn  = document.getElementById('stopBtn');
     const statusEl = document.getElementById('status');
-    const outEl = document.getElementById('output');
+    const transcriptEl = document.getElementById('transcript');
+    const feedbackEl   = document.getElementById('feedback');
+    const player       = document.getElementById('player');
+    const langSel      = document.getElementById('lang');
 
-    goBtn.addEventListener('click', async () => {
-      const prompt = document.getElementById('prompt').value.trim();
-      const transcript = document.getElementById('transcript').value.trim();
+    // ---------- State ----------
+    let mediaStream = null;
+    let recorder = null;
+    let chunks = [];
 
-      if (!transcript) {
-        outEl.textContent = "Please paste a transcript first.";
+    // ---------- Helpers ----------
+    function pickMime() {
+      const candidates = [
+        'audio/webm;codecs=opus', // Chrome/Edge
+        'audio/webm',
+        'audio/mp4',              // Safari fallback
+        'audio/ogg;codecs=opus'   // Firefox
+      ];
+      for (const c of candidates) {
+        if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c)) return c;
+      }
+      return '';
+    }
+
+    function setStatus(msg, cls = '') {
+      statusEl.className = 'muted ' + cls;
+      statusEl.textContent = msg;
+    }
+
+    function stopAudio() {
+      try {
+        player.pause(); player.currentTime = 0;
+        const src = player.src; player.src = ''; player.src = src;
+      } catch (_) {}
+    }
+
+    // ---------- Recording ----------
+    async function startRecording() {
+      setStatus('Requesting microphone…');
+      stopAudio();
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setStatus('Microphone not available in this browser.', 'err');
         return;
       }
 
-      statusEl.textContent = "Working...";
-      outEl.textContent = "";
-
       try {
-        const res = await fetch('/api/feedback', {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (e) {
+        setStatus('Microphone permission denied.', 'err');
+        return;
+      }
+
+      const mimeType = pickMime();
+      try {
+        recorder = new MediaRecorder(mediaStream, mimeType ? { mimeType } : undefined);
+      } catch (e) {
+        setStatus('MediaRecorder not supported for this mime.', 'err');
+        return;
+      }
+
+      chunks = [];
+      recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+
+      recorder.start();
+      startBtn.disabled = true;
+      stopBtn.disabled  = false;
+      setStatus(`Recording… ${mimeType || '(default mime)'}`, 'ok');
+    }
+
+    function stopRecording() {
+      return new Promise((resolve) => {
+        if (!recorder) { resolve(null); return; }
+        recorder.onstop = () => {
+          try { mediaStream.getTracks().forEach(t => t.stop()); } catch (_) {}
+          const blob = new Blob(chunks, { type: (recorder && recorder.mimeType) ? recorder.mimeType : 'audio/webm' });
+          console.log('Recorder mime:', recorder ? recorder.mimeType : '(none)', 'size:', blob.size);
+          resolve(blob);
+        };
+        try { recorder.stop(); } catch (_) { resolve(null); }
+      });
+    }
+
+    // ---------- Pipeline: STT -> Feedback -> TTS ----------
+    async function processAudioBlob(blob) {
+      if (!blob || blob.size < 2000) {
+        setStatus(`No usable audio captured (size=${blob ? blob.size : 0}).`, 'err');
+        transcriptEl.textContent = '(no speech detected)';
+        return;
+      }
+
+      // 1) STT
+      setStatus('Transcribing…');
+      const filename = ((recorder && recorder.mimeType) || '').includes('mp4') ? 'speech.m4a' : 'speech.webm';
+      const form = new FormData();
+      form.append('file', blob, filename);
+      form.append('lang', langSel.value || 'en-GB');
+
+      let transcript = '';
+      try {
+        const sttResp = await fetch('/api/stt', { method: 'POST', body: form });
+        const sttJson = await sttResp.json();
+        console.log('STT:', sttJson);
+        if (!sttResp.ok) throw new Error(sttJson.error || 'STT failed');
+        transcript = (sttJson.transcript || '').trim();
+      } catch (e) {
+        setStatus('Transcription failed: ' + e.message, 'err');
+        return;
+      }
+      transcriptEl.textContent = transcript || '(empty transcript)';
+      if (!transcript) { setStatus('Empty transcript.', 'err'); return; }
+
+      // 2) Feedback
+      setStatus('Getting feedback…');
+      let feedback = '';
+      try {
+        const fbResp = await fetch('/api/feedback', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ transcript, prompt })
+          body: JSON.stringify({ transcript, prompt: '' })
         });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          outEl.textContent = "Error: " + (data.error || "Unknown error");
-        } else {
-          outEl.textContent = data.feedback || "(no feedback returned)";
-        }
-      } catch (err) {
-        outEl.textContent = "Network error: " + err.message;
-      } finally {
-        statusEl.textContent = "";
+        const fbJson = await fbResp.json();
+        console.log('Feedback:', fbJson);
+        if (!fbResp.ok) throw new Error(fbJson.error || 'Feedback failed');
+        feedback = (fbJson.feedback || '').trim();
+      } catch (e) {
+        setStatus('Feedback failed: ' + e.message, 'err');
+        return;
       }
+      feedbackEl.textContent = feedback || '(no feedback returned)';
+
+      // 3) TTS
+      setStatus('Speaking feedback…');
+      try {
+        const ttsResp = await fetch('/api/tts', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ text: feedback, voice: 'alloy' }) // server returns MP3
+});
+
+        if (!ttsResp.ok) {
+          const j = await ttsResp.json().catch(()=>({}));
+          throw new Error(j.details || j.error || 'TTS failed');
+        }
+        const audioBlob = await ttsResp.blob();
+        player.src = URL.createObjectURL(audioBlob);
+        await player.play().catch(()=>{ /* gesture may be needed first time */ });
+      } catch (e) {
+        setStatus('TTS failed: ' + e.message, 'err');
+        return;
+      }
+
+      setStatus('Done.', 'ok');
+    }
+
+    // ---------- Wire up buttons ----------
+    startBtn.addEventListener('click', startRecording);
+    stopBtn.addEventListener('click', async () => {
+      stopBtn.disabled = true;
+      const blob = await stopRecording();
+      startBtn.disabled = false;
+      await processAudioBlob(blob);
     });
   </script>
 </body>

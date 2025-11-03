@@ -6,7 +6,7 @@ from config import settings
 from audit import write_event
 import openai
 
-bp_ai = Blueprint("ai", __name__, url_prefix="/api")
+bp_ai = Blueprint("ai_bp", __name__, url_prefix="/api")
 
 # --- Configure the OpenAI client (OpenAI or Azure OpenAI) ---
 if settings.AZURE_OPENAI_ENDPOINT and settings.AZURE_OPENAI_API_KEY:
@@ -20,7 +20,7 @@ if settings.AZURE_OPENAI_ENDPOINT and settings.AZURE_OPENAI_API_KEY:
 else:
     # Standard OpenAI
     openai_client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
-    MODEL_ID = "gpt-4o-mini"  # small/fast model is fine for PoC
+    MODEL_ID = "gpt-4o-mini"  # small/fast model
 
 def db_session():
     return next(get_db())
@@ -74,7 +74,7 @@ def get_feedback():
             db.commit()
             write_event("AI_FEEDBACK_CREATED", {
                 "id": log.id,
-                "model": model_used,
+                "model": MODEL_ID,
                 "input_chars": len(transcript),
             })
 

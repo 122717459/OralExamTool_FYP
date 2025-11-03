@@ -1,0 +1,6 @@
+2025-10-24T13:58:29.946606 | AI_FEEDBACK_CREATED | id=4 ; model=gpt-4o-mini ; input_chars=47
+2025-10-30T10:02:51.586412 | AI_FEEDBACK_CREATED | id=5 ; model=gpt-4o-mini ; input_chars=47
+2025-11-03T13:28:00.899099 | AI_FEEDBACK_CREATED | id=6 ; model=gpt-4o-mini ; input_chars=54
+2025-11-03T15:20:08.000944 | AI_FEEDBACK_CREATED | id=7 ; model=gpt-4o-mini ; input_chars=3
+2025-11-03T15:36:03.574422 | AI_FEEDBACK_CREATED | id=8 ; model=gpt-4o-mini ; input_chars=3
+2025-11-03T15:44:14.835486 | AI_FEEDBACK_CREATED | id=9 ; model=gpt-4o-mini ; input_chars=62

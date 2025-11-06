@@ -8,7 +8,8 @@ import openai
 
 bp_ai = Blueprint("ai_bp", __name__, url_prefix="/api")
 
-# --- Configure the OpenAI client (OpenAI or Azure OpenAI) ---
+# --- Configure the OpenAI client (OpenAI or Azure OpenAI)  I am going with OpenAI will adjust this code later to remove the azure.
+# This code is from ChatGPT
 if settings.AZURE_OPENAI_ENDPOINT and settings.AZURE_OPENAI_API_KEY:
     # Azure OpenAI
     openai_client = openai.AzureOpenAI(
@@ -24,9 +25,12 @@ else:
 
 def db_session():
     return next(get_db())
+# generates a SQLAlchemy session, Calling above pulls one session you can use with a block.
 
+
+#This Code is from ChatGPT
 @bp_ai.post("/feedback")
-def get_feedback():
+def get_feedback(): # Registers a post endpoint at /api/feedback. lays out expected JSON payload.
     """
     POST JSON:
     {
@@ -40,8 +44,9 @@ def get_feedback():
 
     if not transcript:
         return jsonify({"error": "transcript is required"}), 400
+    # Parses JSON body, Extracts transcript (required) and prompt ( optional) trimming white space. If transcript is empty returns error.
 
-    system_msg = "You are a concise, supportive language tutor for oral exams."
+    system_msg = "You are a concise, supportive language tutor for oral exams." # Sets the assistant's role
     user_msg = (
         f"Question (optional): {prompt}\n"
         f"Student answer: {transcript}\n\n"
@@ -49,22 +54,23 @@ def get_feedback():
         "1) Key mistakes (grammar/word choice/fluency)\n"
         "2) Corrected answer (one good version)\n"
         "3) One tip to improve"
-    )
+        "4) Score the student's answer from 1 to 10. Anchors: 10=excellent, 7–8=good, 5=okay, 3=weak, 1=very poor."
+    ) # Keeps the model focused, structured, and consice.
 
     try:
-        resp = openai_client.chat.completions.create(
+        resp = openai_client.chat.completions.create( # Calls the chat API
             model=MODEL_ID,
             messages=[
                 {"role": "system", "content": system_msg},
                 {"role": "user", "content": user_msg},
             ],
-            temperature=0.2,
-            max_tokens=250,
+            temperature=0.2, # low randomness - consistent exam-like feedback
+            max_tokens=250, # Caps the output length.
         )
-        feedback = resp.choices[0].message.content.strip()
+        feedback = resp.choices[0].message.content.strip() # Extracts the assistant's text (feedback) from the first choice).
 
         # Save a log row
-        with db_session() as db:  # type: Session
+        with db_session() as db:  # type: Session # Opens a DB session, creates an AnalysisLog row capturing, The original input, The full model feedback, Which model name was used.
             log = AnalysisLog(
                 input_text=transcript,
                 feedback_text=feedback,
@@ -76,10 +82,10 @@ def get_feedback():
                 "id": log.id,
                 "model": MODEL_ID,
                 "input_chars": len(transcript),
-            })
+            }) # Commits the row and sends an audit event with a few metadata fields (ID, model, input, length)
 
         return jsonify({"feedback": feedback, "model": MODEL_ID}), 200
 
     except Exception as e:
         # Surface error message for debugging during PoC
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), 500 # If anything fails return 500 error internal server error.

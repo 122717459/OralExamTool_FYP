@@ -1,7 +1,5 @@
 # app.py
 # Flask application entrypoint and factory.
-# - Registers blueprints (AI, CRUD, Speech)
-# - Adds health/db-check/audit routes
 # - Creates DB tables on startup
 from flask import Flask, jsonify, render_template
 from pathlib import Path
@@ -18,18 +16,19 @@ from routes_crud import bp_crud
 from routes_speech import bp_speech
 
 
+# Calls Flask app to start
 def create_app() -> Flask:
     app = Flask(__name__)
 
-    # Create any missing tables (handy for local dev / PoC)
+    # Create any missing tables
     Base.metadata.create_all(bind=engine)
 
-    # ---------------- HEALTH ----------------
+    # Shows that the database is working
     @app.get("/health")
     def health():
         return jsonify({"status": "ok"}), 200
 
-    # ---------------- DB CHECK ----------------
+    # Is another check on the database
     @app.get("/db-check")
     def db_check():
         from sqlalchemy import text
@@ -38,26 +37,32 @@ def create_app() -> Flask:
             count = result.scalar_one()
         return jsonify({"analysis_logs_count": count}), 200
 
-    # ---------------- HOME ----------------
+    # Calls the Index.html page
     @app.get("/")
     def home():
         return render_template("index.html")
 
     # ---------------- AUDIT VIEW ----------------
+    # This code is from ChatGPT
     @app.get("/audit")
     def audit_view():
         p = Path("supervisor_log.txt")
         if not p.exists() or p.stat().st_size == 0:
             return app.response_class("No audit entries yet.\n", mimetype="text/plain")
         return app.response_class(p.read_text(encoding="utf-8"), mimetype="text/plain")
-
+    # Uses Path("supervisor_log.txt") in the current working directory
+    #If the file doesn't exist or is empty returns message.
+    # Otherwise reads the file and returns it as text.
     # ---------------- AUDIT CLEAR ----------------
+
+    # This code is from ChatGPT
     @app.post("/audit/clear")
     def audit_clear():
         Path("supervisor_log.txt").write_text("", encoding="utf-8")
         return jsonify({"status": "cleared"}), 200
 
     # ---------------- REGISTER BLUEPRINTS ----------------
+    #This code is from ChatGPT
     # Note: register each blueprint exactly once
     app.register_blueprint(bp_ai)       # /api/... (AI feedback)
     app.register_blueprint(bp_crud)     # /api/... (CRUD logs)

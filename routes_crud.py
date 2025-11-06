@@ -1,51 +1,49 @@
-# We import Flask stuff for building the API
+
+# Simple CRUD API for the Analysislog table.
+# We import Flask for building the API
 from flask import Blueprint, request, jsonify
 
-# SQLAlchemy tools for talking to the database
+# SQLAlchemy tools to talk to the database
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
-# These are from your own project — they set up the DB connection and model
+# These are from this project, they set up the DB connection and model
 from db import get_db
 from models import AnalysisLog
+from audit import write_event
 
-
-# We make a "Blueprint" — basically a container for related routes
+# We make a "Blueprint"  a container for related routes
 # This makes it easy to group CRUD endpoints under /api
 bp_crud = Blueprint("crud", __name__, url_prefix="/api")
 
 
-# Helper function to get a database session
-# The get_db() function probably returns a generator, so we grab the next() item from it
+# Get a database session. Our get_db() yields one; we just grab it.
 def db_session():
     return next(get_db())
 
 
-# This turns a database row (AnalysisLog) into a regular Python dict
-# That’s because Flask’s jsonify() can’t handle SQLAlchemy objects directly
+
+# Turn a DB row into a plain dict that jsonify() can handle.
 def to_dict(row: AnalysisLog):
     return {
         "id": row.id,
         "input_text": row.input_text,
         "feedback_text": row.feedback_text,
         "model_name": row.model_name,
-        # If created at exists, convert it to a readable string (ISO format)
+        #  convert it to a readable string (ISO format)
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
 
 
-# ---------------- READ (LIST) ----------------
+#  READ (LIST)
 @bp_crud.get("/logs")
 def list_logs():
     """
-    When you hit GET /api/logs,
-    this will return a paginated list of all logs in the database.
-    You can pass ?page=2&per_page=20 to control it.
+    GET /api/logs
+    Returns a page of logs. You can pass ?page=2&per_page=20.
     """
 
-    # Get page and per_page from the query string
-    # Defaults to page=1 and per_page=10
-    # We also add some sanity limits so users can’t crash the server with crazy values
+    # Read paging values safely. If someone sends junk, we fall back.
     page = max(int(request.args.get("page", 1)), 1)
     per_page = min(max(int(request.args.get("per_page", 10)), 1), 100)
 
@@ -58,7 +56,7 @@ def list_logs():
         # Count how many total rows exist for pagination
         total = db.scalar(select(func.count()).select_from(stmt.subquery()))
 
-        # Actually fetch one "page" of results
+        # fetch one "page" of results
         # Order newest first (highest id)
         rows = db.execute(
             stmt.order_by(AnalysisLog.id.desc()).limit(per_page).offset((page - 1) * per_page)
@@ -73,7 +71,7 @@ def list_logs():
         }), 200
 
 
-# ---------------- READ (ONE) ----------------
+#  READ (ONE)
 @bp_crud.get("/logs/<int:log_id>")
 def get_log(log_id: int):
     # Fetch one log by ID, like GET /api/logs/5
@@ -87,7 +85,7 @@ def get_log(log_id: int):
         return jsonify(to_dict(row)), 200
 
 
-# ---------------- CREATE ----------------
+#  CREATE
 @bp_crud.post("/logs")
 def create_log():
     """
@@ -96,8 +94,8 @@ def create_log():
     {
       "input_text": "some input",
       "feedback_text": "some feedback",
-      "model_name": "gpt-4o-mini",   # optional
-      "scores": { ... }              # optional
+      "model_name": "gpt-4o-mini",
+      "scores": { ... }
     }
     """
 
@@ -122,9 +120,9 @@ def create_log():
             model_name=model_name,
         )
         db.add(row)
-        db.commit()  # Save so it gets an ID
+        db.commit()  # Save so, it gets an ID
 
-        # Handle optional score fields if they exist
+        # # Update score columns only if provided and valid
         changed = False
         mapping = {
             "score_overall": scores.get("overall"),
@@ -157,12 +155,11 @@ def create_log():
         return jsonify(to_dict(row)), 201
 
 
-# ---------------- UPDATE ----------------
+#  UPDATE
 @bp_crud.put("/logs/<int:log_id>")
 def update_log(log_id: int):
     """
-    PUT /api/logs/5 updates an existing record.
-    You can send only the fields you want to change.
+    PUT /api/logs/123 — change any fields you send in.
     """
 
     data = request.get_json(force=True) or {}
@@ -205,7 +202,7 @@ def update_log(log_id: int):
         return jsonify(to_dict(row)), 200
 
 
-# ---------------- DELETE ----------------
+#  DELETE
 @bp_crud.delete("/logs/<int:log_id>")
 def delete_log(log_id: int):
     # DELETE /api/logs/5 removes the record completely

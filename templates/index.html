@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Oral Exam Tool – Simple</title>
+  <title>Oral Exam Tool – Iteration 1</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body { font-family: system-ui, sans-serif; max-width: 680px; margin: 2rem auto; padding: 0 1rem; }
@@ -12,10 +12,10 @@
     .muted { color:#666; font-size:.95rem; }
     .ok { color:#0a0; }
     .err { color:#b00; }
-  </style>
+  </style> <!-- This sets the page's layout and inline CSS -->
 </head>
 <body>
-  <h1>Oral Exam Tool – Simple</h1>
+  <h1>Oral Exam Tool – Iteration 1</h1> <!-- This is the Title of the page, and Sub-heading -->
   <p class="muted">Flow: Start → Stop → Transcribe (STT) → Get Feedback → Speak (TTS).</p>
 
   <div class="row">
@@ -23,11 +23,11 @@
     <button id="stopBtn" disabled>⏹️ Stop & Process</button>
     <select id="lang">
       <option value="en-GB" selected>English (UK)</option>
-      <!-- add more later if you like -->
+      <!-- Buttons starting and stopping the recording also language selection -->
     </select>
   </div>
 
-  <div class="row muted" id="status">Idle.</div>
+  <div class="row muted" id="status">Idle.</div> <!-- A small text area that shows the current status message (recording, transcribing etc) -->
 
   <div class="row">
     <strong>Transcript</strong>
@@ -38,13 +38,14 @@
     <strong>Feedback</strong>
     <div id="feedback" class="box"></div>
   </div>
-
+<!-- Empty boxes that will later display the recognised speech and the feedback text -->
   <div class="row">
     <audio id="player" controls style="width:100%;"></audio>
   </div>
-
+<!-- An audio player that will play the synthesised feedback audio -->
   <script>
-    // ---------- Elements ----------
+    // This code is from ChatGPT
+    // Retrieves all buttons and containers by ID and prepares variables for recording
     const startBtn = document.getElementById('startBtn');
     const stopBtn  = document.getElementById('stopBtn');
     const statusEl = document.getElementById('status');
@@ -57,6 +58,9 @@
     let mediaStream = null;
     let recorder = null;
     let chunks = [];
+    // Media stream is what the browser gives you after the mic permission,
+    // recorder is the engine that encodes audio and emits chunks,
+    // Chunks collects those pieces until you stop recording
 
     // ---------- Helpers ----------
     function pickMime() {
@@ -71,29 +75,36 @@
       }
       return '';
     }
+    // Checks which MIME type the current browser can encode with MediaRecorder.
+    // Tries best - acceptable fallbacks
+    // returned string feeds into (new MediaRecorder(stream, {mimetype}))
 
+    // This Code is from ChatGPT
     function setStatus(msg, cls = '') {
       statusEl.className = 'muted ' + cls;
       statusEl.textContent = msg;
     }
-
+    // Central place to update the status line colour.
+    // This code is from ChatGpt
     function stopAudio() {
       try {
         player.pause(); player.currentTime = 0;
         const src = player.src; player.src = ''; player.src = src;
       } catch (_) {}
     }
+    // Stops any currently playing feedback and resets the audio element so a new blob will load cleanly.
 
     // ---------- Recording ----------
+    // This code is from ChatGPT
     async function startRecording() {
       setStatus('Requesting microphone…');
       stopAudio();
-
+    // Requests the mic (prompts user) if allowed creates a MediaRecorder.
       if (!navigator.mediaDevices?.getUserMedia) {
         setStatus('Microphone not available in this browser.', 'err');
         return;
       }
-
+    // Each time the encoder has data, it pushes a chunk into chunks.
       try {
         mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       } catch (e) {
@@ -117,7 +128,9 @@
       stopBtn.disabled  = false;
       setStatus(`Recording… ${mimeType || '(default mime)'}`, 'ok');
     }
+    // Disables/Enables buttons to prevent double-click race conditions.
 
+    // THis code is from ChatGPT
     function stopRecording() {
       return new Promise((resolve) => {
         if (!recorder) { resolve(null); return; }
@@ -130,8 +143,12 @@
         try { recorder.stop(); } catch (_) { resolve(null); }
       });
     }
+    // Stops the recorder and mic tracks, then joins all chunks into a single Blob
+    // The Blobs type is set to the recorder's MIME when available (helps the server know what it is)
 
     // ---------- Pipeline: STT -> Feedback -> TTS ----------
+    // This code is from ChatGPT
+    // Quick sanity check, tiny blobs are often silence or failed captures.
     async function processAudioBlob(blob) {
       if (!blob || blob.size < 2000) {
         setStatus(`No usable audio captured (size=${blob ? blob.size : 0}).`, 'err');
@@ -140,12 +157,14 @@
       }
 
       // 1) STT
+      // This code is from ChatGpt
       setStatus('Transcribing…');
       const filename = ((recorder && recorder.mimeType) || '').includes('mp4') ? 'speech.m4a' : 'speech.webm';
       const form = new FormData();
       form.append('file', blob, filename);
       form.append('lang', langSel.value || 'en-GB');
-
+    // Constructs a FromData multipart upload with file and lang
+    // Picks a filename extension that matches the container (.m4a if the MIME hinted mp4 otherwise .webm).
       let transcript = '';
       try {
         const sttResp = await fetch('/api/stt', { method: 'POST', body: form });
@@ -159,8 +178,12 @@
       }
       transcriptEl.textContent = transcript || '(empty transcript)';
       if (!transcript) { setStatus('Empty transcript.', 'err'); return; }
+    // Posts to your Flask /api/stt endpoint
+    // expects JSON like {"transcript" : "...", "lang_used": "en"}.
+    // Shows transcript or aborts if empty.
 
       // 2) Feedback
+      // This code is from ChatGPT
       setStatus('Getting feedback…');
       let feedback = '';
       try {
@@ -179,7 +202,12 @@
       }
       feedbackEl.textContent = feedback || '(no feedback returned)';
 
+      // Sends tanscript to /api/feedback.
+        // Expects JSON like {"feedback": "..."}.
+        // Renders the feedback in the UI.
+
       // 3) TTS
+      // This code is from ChatGPT
       setStatus('Speaking feedback…');
       try {
         const ttsResp = await fetch('/api/tts', {
@@ -187,6 +215,7 @@
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ text: feedback, voice: 'alloy' }) // server returns MP3
 });
+
 
         if (!ttsResp.ok) {
           const j = await ttsResp.json().catch(()=>({}));
@@ -203,7 +232,13 @@
       setStatus('Done.', 'ok');
     }
 
+    // Posts feedback text to /api/tts, which returns audio bytes (MP3)
+        // Converts the response to a Blob, makes an object URL, and sets audio.src.
+        // Calls play() (may silently fail on first use without a user gesture; already have a click, so it's usually fine).
+
+
     // ---------- Wire up buttons ----------
+    // This code is from ChatGPT
     startBtn.addEventListener('click', startRecording);
     stopBtn.addEventListener('click', async () => {
       stopBtn.disabled = true;
@@ -211,6 +246,8 @@
       startBtn.disabled = false;
       await processAudioBlob(blob);
     });
+    // Connects UI actions to the recording/pipline functions
+    // Handles a simple enabled/disabled state to keep UX stable
   </script>
 </body>
 </html>

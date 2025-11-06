@@ -1,4 +1,5 @@
-from dotenv import load_dotenv
+#dotenv and load_dotenv I learned from ChatGPT
+from dotenv import load_dotenv #Helper library that reads .env files
 import os
 
 # Load all variables from the .env file
@@ -24,5 +25,5 @@ class Settings:
     AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT")
 
 
-# Create a global instance we can import anywhere
+# Create a global instance we can import anywhere in the app
 settings = Settings()

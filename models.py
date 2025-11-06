@@ -4,13 +4,13 @@
 # - func: lets us use SQL functions (like now() for timestamps)
 from sqlalchemy import Column, Integer, Text, String, DateTime, func
 
-# Import the Base class we made in db.py — this links our model to the database setup
+# Import the Base class made in db.py, this links our model to the database setup
 from db import Base
 
 
-# ------------------------------------------------------------
+
 # Define the "analysis_logs" table as a Python class
-# ------------------------------------------------------------
+
 # This class represents one table in the database.
 # Each attribute below becomes a column in that table.
 # Each instance of the class represents one row in that table.

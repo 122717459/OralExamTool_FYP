@@ -14,4 +14,4 @@ def write_event(event: str, details: dict):
     line = f"{ts} | {event} | " + " ; ".join(parts)
     with LOG_PATH.open("a", encoding="utf-8") as f:
         f.write(line + "\n")
-# Each entry will include the UTC timestamp, the event time and, a compact list of key value pairs describing details.
+# Each entry will include the UTC timestamp, the event time and, a compact list of key value pairs describing  details.

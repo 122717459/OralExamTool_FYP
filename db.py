@@ -10,7 +10,7 @@ from config import settings
 
 
 
-# Create the database engine
+# Creates the database engine
 
 # The engine is the "core" connection to your database.
 # It knows where your database lives (from DATABASE_URL in .env)

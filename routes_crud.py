@@ -1,6 +1,6 @@
 
 # Simple CRUD API for the Analysislog table.
-# We import Flask for building the API
+# We import Flask for building the  API
 from flask import Blueprint, request, jsonify
 
 # SQLAlchemy tools to talk to the database

@@ -10,3 +10,16 @@
 2025-11-05T16:46:53.507840 | AI_FEEDBACK_CREATED | id=13 ; model=gpt-4o-mini ; input_chars=159
 2025-11-05T16:47:44.268564 | AI_FEEDBACK_CREATED | id=14 ; model=gpt-4o-mini ; input_chars=56
 2025-11-05T16:48:46.040781 | AI_FEEDBACK_CREATED | id=15 ; model=gpt-4o-mini ; input_chars=23
+2025-11-06T13:07:03.526196 | AI_FEEDBACK_CREATED | id=16 ; model=gpt-4o-mini ; input_chars=99
+2025-11-06T13:10:47.126144 | AI_FEEDBACK_CREATED | id=17 ; model=gpt-4o-mini ; input_chars=146
+2025-11-06T13:11:17.874311 | AI_FEEDBACK_CREATED | id=18 ; model=gpt-4o-mini ; input_chars=138
+2025-11-10T11:13:15.743760 | AI_FEEDBACK_CREATED | id=19 ; model=gpt-4o-mini ; input_chars=72
+2025-11-10T11:17:21.501187 | AI_FEEDBACK_CREATED | id=20 ; model=gpt-4o-mini ; input_chars=114
+2025-11-17T15:18:26.720533 | AI_EXAM_TURN_CREATED | id=21 ; model=gpt-4o-mini ; input_chars=116
+2025-11-17T16:01:30.915566 | AI_EXAM_TURN_CREATED | id=22 ; model=gpt-4o-mini ; input_chars=398
+2025-11-17T16:02:26.692701 | AI_EXAM_TURN_CREATED | id=23 ; model=gpt-4o-mini ; input_chars=137
+2025-11-17T16:03:30.745448 | AI_EXAM_TURN_CREATED | id=24 ; model=gpt-4o-mini ; input_chars=299
+2025-11-17T16:04:31.854834 | AI_EXAM_TURN_CREATED | id=25 ; model=gpt-4o-mini ; input_chars=279
+2025-11-17T16:12:41.734295 | AI_EXAM_TURN_CREATED | id=26 ; model=gpt-4o-mini ; input_chars=240
+2025-11-17T16:13:56.580957 | AI_EXAM_TURN_CREATED | id=27 ; model=gpt-4o-mini ; input_chars=555
+2025-11-17T16:14:41.994525 | AI_EXAM_TURN_CREATED | id=28 ; model=gpt-4o-mini ; input_chars=172

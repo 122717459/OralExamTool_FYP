@@ -1,5 +1,5 @@
 from db import engine, Base
-from models import AnalysisLog  # ensures the model is registered
+from models import AnalysisLog  # ensures the model is  registered
 
 def main():
     # Create all tables defined on Base metadata (includes AnalysisLog)

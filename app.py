@@ -20,6 +20,7 @@ from routes_speech import bp_speech
 def create_app() -> Flask:
     app = Flask(__name__)
 
+
     # Create any missing tables
     Base.metadata.create_all(bind=engine)
 
@@ -42,7 +43,7 @@ def create_app() -> Flask:
     def home():
         return render_template("index.html")
 
-    # ---------------- AUDIT VIEW ----------------
+    #  AUDIT VIEW
     # This code is from ChatGPT
     @app.get("/audit")
     def audit_view():
@@ -53,7 +54,7 @@ def create_app() -> Flask:
     # Uses Path("supervisor_log.txt") in the current working directory
     #If the file doesn't exist or is empty returns message.
     # Otherwise reads the file and returns it as text.
-    # ---------------- AUDIT CLEAR ----------------
+    #  AUDIT CLEAR
 
     # This code is from ChatGPT
     @app.post("/audit/clear")
@@ -61,7 +62,8 @@ def create_app() -> Flask:
         Path("supervisor_log.txt").write_text("", encoding="utf-8")
         return jsonify({"status": "cleared"}), 200
 
-    # ---------------- REGISTER BLUEPRINTS ----------------
+    #  REGISTER BLUEPRINTS-
+
     #This code is from ChatGPT
     # Note: register each blueprint exactly once
     app.register_blueprint(bp_ai)       # /api/... (AI feedback)

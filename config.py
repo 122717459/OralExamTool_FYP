@@ -2,7 +2,7 @@
 from dotenv import load_dotenv #Helper library that reads .env files
 import os
 
-# Load all variables from the .env file
+# Load all variables from the .env  file
 load_dotenv()
 
 

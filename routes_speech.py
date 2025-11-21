@@ -1,4 +1,4 @@
-# (OpenAI; Whisper STT forced language; unique endpoints)
+# (OpenAI;  Whisper STT forced language; unique endpoints)
 from flask import Blueprint, request, jsonify, Response, send_file
 from config import settings
 from openai import OpenAI

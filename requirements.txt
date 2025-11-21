@@ -2,4 +2,4 @@ flask
 sqlalchemy
 python-dotenv
 openai
-# These are the needed downloads to run this programme.
+# These are the needed downloads to run this  programme.

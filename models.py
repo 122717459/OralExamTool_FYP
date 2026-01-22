@@ -3,6 +3,11 @@
 # - Integer, Text, String, DateTime: column data types
 # - func: lets us use SQL functions (like now() for timestamps)
 from sqlalchemy import Column, Integer, Text, String, DateTime, func
+from datetime import datetime
+from flask_login import UserMixin
+from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import Column, Integer, Text, String, DateTime, func, ForeignKey, Boolean
+
 
 # Import the Base class made in db.py, this links our model to the database setup
 from db import Base
@@ -20,6 +25,7 @@ class AnalysisLog(Base):
 
     # Primary key column — unique ID for each record
     id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     # Text input from the user (could be long, so we use Text instead of String)
     input_text = Column(Text, nullable=False)
@@ -30,7 +36,37 @@ class AnalysisLog(Base):
     # Name of the AI model used, stored as a short string (limit 120 chars)
     model_name = Column(String(120), nullable=False)
 
+
     # Timestamp for when the record was created
     # server_default=func.now() means the database automatically fills this in
     # using the current time — we don’t need to set it manually in Python
     created_at = Column(DateTime, server_default=func.now())
+# This tabel represents the users table. It stores login credentials for each user.
+class User(UserMixin, Base):
+    # Name of the table
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+
+    email = Column(String(255), unique=True, nullable=False, index=True)
+
+    password_hash = Column(String(255), nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Admin flag (developer/supervisor account).
+    is_admin = Column(Boolean, default=False, nullable=False)
+
+    # User preference: language used in the exam ("english", "french", "german")
+    preferred_language = Column(String(20), default="english", nullable=False)
+
+    # User preference: difficulty level ("beginner", "moderate", "expert")
+    preferred_difficulty = Column(String(20), default="moderate", nullable=False)
+
+    def set_password(self, password: str) -> None:
+        self.password_hash = generate_password_hash(password)
+        """ Converts a plain text to a password hash """
+
+    def check_password(self, password: str) -> bool:
+        """ Checks a plain text password against the password hash """
+        return check_password_hash(self.password_hash, password)

@@ -1,16 +1,14 @@
-
 # Simple CRUD API for the Analysislog table.
 # We import Flask for building the  API
+from flask_login import login_required, current_user
 from flask import Blueprint, request, jsonify
-
-# SQLAlchemy tools to talk to the database
+from flask import Blueprint, request, jsonify # SQLAlchemy tools to talk to the database
 from sqlalchemy import select, func
-from sqlalchemy.orm import Session
-
-# These are from this project, they set up the DB connection and model
+from sqlalchemy.orm import Session # These are from this project, they set up the DB connection and model
 from db import get_db
 from models import AnalysisLog
 from audit import write_event
+from flask_login import login_required, current_user
 
 # We make a "Blueprint"  a container for related routes
 # This makes it easy to group CRUD endpoints under /api
@@ -27,6 +25,7 @@ def db_session():
 def to_dict(row: AnalysisLog):
     return {
         "id": row.id,
+        "user_id": row.user_id,
         "input_text": row.input_text,
         "feedback_text": row.feedback_text,
         "model_name": row.model_name,
@@ -37,6 +36,7 @@ def to_dict(row: AnalysisLog):
 
 #  READ (LIST)
 @bp_crud.get("/logs")
+@login_required
 def list_logs():
     """
     GET /api/logs
@@ -51,7 +51,8 @@ def list_logs():
     with db_session() as db:  # type: Session
 
         # Build a base SELECT query
-        stmt = select(AnalysisLog)
+        stmt = select(AnalysisLog).where(AnalysisLog.user_id == current_user.id)
+
 
         # Count how many total rows exist for pagination
         total = db.scalar(select(func.count()).select_from(stmt.subquery()))
@@ -73,12 +74,15 @@ def list_logs():
 
 #  READ (ONE)
 @bp_crud.get("/logs/<int:log_id>")
+@login_required
 def get_log(log_id: int):
     # Fetch one log by ID, like GET /api/logs/5
     with db_session() as db:  # type: Session
         row = db.get(AnalysisLog, log_id)
         if not row:
             # If nothing found, return a 404
+            return jsonify({"error": "not found"}), 404
+        if row.user_id != current_user.id: #blocks access to other users, use not found to avoid leaking that the ID exists.
             return jsonify({"error": "not found"}), 404
 
         # Otherwise return it as JSON
@@ -87,6 +91,7 @@ def get_log(log_id: int):
 
 #  CREATE
 @bp_crud.post("/logs")
+@login_required
 def create_log():
     """
     POST /api/logs creates a new log record.
@@ -118,7 +123,9 @@ def create_log():
             input_text=input_text,
             feedback_text=feedback_text,
             model_name=model_name,
+            user_id=current_user.id,
         )
+
         db.add(row)
         db.commit()  # Save so, it gets an ID
 
@@ -157,6 +164,7 @@ def create_log():
 
 #  UPDATE
 @bp_crud.put("/logs/<int:log_id>")
+@login_required
 def update_log(log_id: int):
     """
     PUT /api/logs/123 — change any fields you send in.
@@ -166,6 +174,9 @@ def update_log(log_id: int):
     with db_session() as db:  # type: Session
         row = db.get(AnalysisLog, log_id)
         if not row:
+            return jsonify({"error": "not found"}), 404
+
+        if row.user_id != current_user.id:
             return jsonify({"error": "not found"}), 404
 
         # Update text fields if provided
@@ -204,11 +215,15 @@ def update_log(log_id: int):
 
 #  DELETE
 @bp_crud.delete("/logs/<int:log_id>")
+@login_required
 def delete_log(log_id: int):
     # DELETE /api/logs/5 removes the record completely
     with db_session() as db:  # type: Session
         row = db.get(AnalysisLog, log_id)
         if not row:
+            return jsonify({"error": "not found"}), 404
+
+        if row.user_id != current_user.id:
             return jsonify({"error": "not found"}), 404
 
         db.delete(row)

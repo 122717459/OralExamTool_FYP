@@ -3,26 +3,47 @@
 # - Creates DB tables on startup
 from flask import Flask, jsonify, render_template
 from pathlib import Path
+from flask_login import LoginManager
+from flask_login import login_required
 
 # DB setup
-from db import engine, Base
+from db import engine, Base, SessionLocal
 
-# Ensure models are imported so SQLAlchemy knows about them
-from models import AnalysisLog  # noqa: F401  (imported for side-effect)
+
+# Ensure models are imported so SQLAlchemy knows about them noqa f401 stops warning
+from models import AnalysisLog, User  # noqa: F401  (imported for side-effect)
 
 # Blueprints
 from routes_ai import bp_ai
 from routes_crud import bp_crud
 from routes_speech import bp_speech
+from routes_auth import bp_auth
+from routes_admin import bp_admin
+from routes_user import bp_user
 
 
 # Calls Flask app to start
 def create_app() -> Flask:
     app = Flask(__name__)
 
+    app.config["SECRET_KEY"] = "dev-change-this"
 
     # Create any missing tables
     Base.metadata.create_all(bind=engine)
+    # Flask-Login setup
+    login_manager = LoginManager()
+    login_manager.login_view = "auth.login_get"  # where to redirect if not logged in
+    login_manager.init_app(app)
+
+    @login_manager.user_loader
+    def load_user(user_id: str):
+        # Flask-Login stores user_id in the session as a string
+        db = SessionLocal()
+        try:
+            return db.get(User, int(user_id))
+        finally:
+            db.close()
+
 
     # Shows that the database is working
     @app.get("/health")
@@ -38,14 +59,16 @@ def create_app() -> Flask:
             count = result.scalar_one()
         return jsonify({"analysis_logs_count": count}), 200
 
-    # Calls the Index.html page
+    # Calls the Index.html page also requires the user to be logged in
     @app.get("/")
+    @login_required
     def home():
         return render_template("index.html")
 
     #  AUDIT VIEW
     # This code is from ChatGPT
     @app.get("/audit")
+    @login_required
     def audit_view():
         p = Path("supervisor_log.txt")
         if not p.exists() or p.stat().st_size == 0:
@@ -58,6 +81,7 @@ def create_app() -> Flask:
 
     # This code is from ChatGPT
     @app.post("/audit/clear")
+    @login_required
     def audit_clear():
         Path("supervisor_log.txt").write_text("", encoding="utf-8")
         return jsonify({"status": "cleared"}), 200
@@ -69,6 +93,9 @@ def create_app() -> Flask:
     app.register_blueprint(bp_ai)       # /api/... (AI feedback)
     app.register_blueprint(bp_crud)     # /api/... (CRUD logs)
     app.register_blueprint(bp_speech)   # /api/... (STT / TTS / streaming answer)
+    app.register_blueprint(bp_auth)     # ( for user login)
+    app.register_blueprint(bp_admin)  # /admin/... (admin-only)
+    app.register_blueprint(bp_user)  # /api/user/... (user preferences)
 
     # Optional: simple 404 for convenience during dev
     @app.errorhandler(404)

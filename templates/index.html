@@ -22,6 +22,19 @@
     → You answer → STT → Feedback (spoken) → Retry same question (optional) → Next Question (when you click).
   </p>
 
+  {% if current_user.is_authenticated %}
+  <p>Logged in as: <strong>{{ current_user.email }}</strong></p>
+
+  <form method="post" action="{{ url_for('auth.logout_post') }}">
+    <button type="submit">Logout</button>
+  </form>
+{% else %}
+  <p>You are not logged in.</p>
+  <a href="{{ url_for('auth.login_get') }}">Login</a> |
+  <a href="{{ url_for('auth.signup_get') }}">Sign up</a>
+{% endif %}
+
+
   <!-- Difficulty and topic selection so the user can control the kind of practice -->
   <div class="row">
     <!-- Difficulty dropdown: beginner / moderate / expert -->
@@ -31,6 +44,16 @@
       <option value="moderate" selected>Moderate</option>
       <option value="expert">Expert</option>
     </select>
+
+
+          <!-- Exam language selection (saved to the user account) -->
+    <label for="examLanguage"><strong>Language:</strong></label>
+    <select id="examLanguage">
+      <option value="english" selected>English</option>
+      <option value="french">French</option>
+      <option value="german">German</option>
+    </select>
+
 
     <!-- Topic dropdown: user chooses what to practise -->
     <label for="topic"><strong>Topic:</strong></label>
@@ -48,14 +71,12 @@
     <button id="startExamBtn">📝 Start Exam (Get Question)</button>
   </div>
 
-  <!-- Recording controls: start/stop recording + language selection -->
-  <div class="row">
-    <button id="startBtn">🎙️ Start Recording</button>
-    <button id="stopBtn" disabled>⏹️ Stop & Get Feedback</button>
-    <select id="lang">
-      <option value="en-GB" selected>English (UK)</option>
-    </select>
-  </div>
+  <!-- Recording controls: start/stop recording -->
+<div class="row">
+  <button id="startBtn">🎙️ Start Recording</button>
+  <button id="stopBtn" disabled>⏹️ Stop & Get Feedback</button>
+</div>
+
 
   <!-- A small status line that shows what the system is doing (idle, recording, etc.) -->
   <div class="row muted" id="status">Idle.</div>
@@ -122,9 +143,10 @@
     const transcriptEl = document.getElementById('transcript');
     const feedbackEl   = document.getElementById('feedback');
     const player       = document.getElementById('player');
-    const langSel      = document.getElementById('lang');
     const difficultySel= document.getElementById('difficulty');
     const topicSel     = document.getElementById('topic');
+    const examLangSel  = document.getElementById('examLanguage');
+
 
     // This code is from ChatGPT
     // Dictionary elements
@@ -166,7 +188,65 @@
 
     // This code is from ChatGPT
     // Stops any currently playing audio and resets the audio element.
+    // Stops any currently playing audio and resets the audio element.
     function stopAudio() {
+      try {
+        player.pause();
+        player.currentTime = 0;
+        const src = player.src;
+        player.src = '';
+        player.src = src;
+      } catch (_) {}
+    }
+
+    // ----------------------------
+    // User Preferences (saved per account)
+    // ----------------------------
+
+    async function loadUserPreferences() {
+      try {
+        const resp = await fetch('/api/user/preferences', { credentials: 'same-origin' });
+        if (!resp.ok) return;
+
+        const prefs = await resp.json();
+
+        if (prefs.preferred_difficulty && difficultySel) {
+          difficultySel.value = prefs.preferred_difficulty;
+        }
+
+        if (prefs.preferred_language && examLangSel) {
+          examLangSel.value = prefs.preferred_language;
+        }
+      } catch (e) {
+        console.warn('Could not load preferences:', e);
+      }
+    }
+
+    let prefsSaveTimer = null;
+
+    function scheduleSaveUserPreferences() {
+      if (prefsSaveTimer) clearTimeout(prefsSaveTimer);
+
+      prefsSaveTimer = setTimeout(async () => {
+        try {
+          const payload = {
+            preferred_language: examLangSel ? examLangSel.value : 'english',
+            preferred_difficulty: difficultySel ? difficultySel.value : 'moderate'
+          };
+
+          await fetch('/api/user/preferences', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(payload)
+          });
+        } catch (e) {
+          console.warn('Could not save preferences:', e);
+        }
+      }, 200);
+    }
+
+{
       try {
         player.pause();
         player.currentTime = 0;
@@ -274,12 +354,13 @@
       // Read the selected difficulty and topic from the dropdowns.
       const difficulty = difficultySel.value;   // "beginner", "moderate" or "expert"
       const topic      = topicSel.value;        // e.g. "school life"
+      const language   = examLangSel ? examLangSel.value : 'english';
 
       try {
         const resp = await fetch('/api/start_exam', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ topic, difficulty })
+          body: JSON.stringify({ topic, difficulty, language })
         });
         const data = await resp.json();
         console.log('start_exam:', data);
@@ -325,13 +406,16 @@
       // Read the difficulty and topic again so the backend knows the context.
       const difficulty = difficultySel.value;
       const topic      = topicSel.value;
+      const language   = examLangSel ? examLangSel.value : 'english';
 
       // 1) STT (Speech-to-Text): send audio to /api/stt
       setStatus('Transcribing…');
       const filename = ((recorder && recorder.mimeType) || '').includes('mp4') ? 'speech.m4a' : 'speech.webm';
       const form = new FormData();
       form.append('file', blob, filename);              // The recorded audio
-      form.append('lang', langSel.value || 'en-GB');    // The chosen language
+      const sttLang = examLangSel ? (examLangSel.value === 'french' ? 'fr' : examLangSel.value === 'german' ? 'de' : 'en-GB') : 'en-GB';
+form.append('lang', sttLang);
+
 
       let transcript = '';
       try {
@@ -357,8 +441,10 @@
             transcript,
             last_question: currentQuestion,
             topic,
-            difficulty
-          })
+            difficulty,
+            language
+         })
+
         });
         const fbJson = await fbResp.json();
         console.log('exam_turn:', fbJson);
@@ -521,6 +607,15 @@
       await processAudioBlob(blob);     // Run STT + exam_turn
       stopBtn.disabled = false;         // Allow the user to record again
     });
+
+
+        // Load saved preferences on page load
+    window.addEventListener('DOMContentLoaded', loadUserPreferences);
+
+    // Save preferences when changed
+if (difficultySel) difficultySel.addEventListener('change', scheduleSaveUserPreferences);
+if (examLangSel) examLangSel.addEventListener('change', scheduleSaveUserPreferences);
+
 
     // When the user clicks “Retry This Question”, replay the same question and reset transcript/feedback.
     retryBtn.addEventListener('click', retryQuestion);

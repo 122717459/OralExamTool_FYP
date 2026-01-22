@@ -4,6 +4,7 @@ from db import get_db
 from models import AnalysisLog
 from config import settings
 from audit import write_event
+from flask_login import login_required, current_user
 import openai
 import json
 
@@ -44,6 +45,7 @@ def start_exam():
     data = request.get_json(force=True) or {}
     topic = (data.get("topic") or "general English conversation").strip()
     difficulty = (data.get("difficulty") or "moderate").strip().lower()
+    language = (data.get("language") or "english").strip().lower()
 
     # Map your difficulty labels to approximate CEFR-like descriptions.
     if difficulty == "beginner":
@@ -56,8 +58,17 @@ def start_exam():
         level_desc = "B1 (intermediate)"
         difficulty_hint = "Use everyday vocabulary but allow some detail and explanation."
 
+    if language == "french":
+        lang_name = "French"
+    elif language == "german":
+        lang_name = "German"
+    else:
+        lang_name = "English"
+
     system_msg = (
-        f"You are an oral-exam interlocutor for a {level_desc} English learner. "
+        f"You are an oral-exam interlocutor for a {level_desc} learner. "
+        f"The exam language is {lang_name}. "
+        f"ALWAYS speak and write in {lang_name}. "
         f"The practice topic is: {topic}. "
         f"{difficulty_hint} "
         "Ask ONE clear, open-ended question that the student can answer in 20–40 seconds. "
@@ -87,6 +98,7 @@ def start_exam():
 
 # This code is from ChatGPT
 @bp_ai.post("/exam_turn")
+@login_required
 def exam_turn():
     """
     Handles one turn of the oral exam:
@@ -104,6 +116,7 @@ def exam_turn():
     last_question = (data.get("last_question") or "").strip()
     topic = (data.get("topic") or "general English conversation").strip()
     difficulty = (data.get("difficulty") or "moderate").strip().lower()
+    language = (data.get("language") or "english").strip().lower()
 
     if not transcript:
         return jsonify({"error": "transcript is required"}), 400
@@ -130,8 +143,17 @@ def exam_turn():
             "Focus feedback on common grammar mistakes and fluency."
         )
 
+    if language == "french":
+        lang_name = "French"
+    elif language == "german":
+        lang_name = "German"
+    else:
+        lang_name = "English"
+
     system_msg = (
-        f"You are a supportive but realistic oral-exam tutor for a {level_desc} English learner. "
+        f"You are a supportive but realistic oral-exam tutor for a {level_desc} learner. "
+        f"The exam language is {lang_name}. "
+        f"ALWAYS respond in {lang_name}. "
         f"The practice topic is: {topic}. "
         f"{difficulty_hint} "
         "You are practising an oral exam with the student. "
@@ -183,7 +205,8 @@ def exam_turn():
             log = AnalysisLog(
                 input_text=transcript,
                 feedback_text=feedback_text,
-                model_name=MODEL_ID
+                model_name=MODEL_ID,
+                user_id=current_user.id
             )
             db.add(log)
             db.commit()
@@ -210,6 +233,7 @@ def exam_turn():
 
 #This Code is from ChatGPT
 @bp_ai.post("/feedback")
+@login_required
 def get_feedback(): # Registers a post endpoint at /api/feedback. lays out expected JSON payload.
     """
     POST JSON:
@@ -254,8 +278,10 @@ def get_feedback(): # Registers a post endpoint at /api/feedback. lays out expec
             log = AnalysisLog(
                 input_text=transcript,
                 feedback_text=feedback,
-                model_name=MODEL_ID
+                model_name=MODEL_ID,
+                user_id=current_user.id
             )
+
             db.add(log)
             db.commit()
             write_event("AI_FEEDBACK_CREATED", {

@@ -11,7 +11,7 @@ from db import engine, Base, SessionLocal
 
 
 # Ensure models are imported so SQLAlchemy knows about them noqa f401 stops warning
-from models import AnalysisLog, User  # noqa: F401  (imported for side-effect)
+from models import AnalysisLog, User ,ExamSession, ExamTurn  # noqa: F401  (imported for side-effect)
 
 # Blueprints
 from routes_ai import bp_ai
@@ -59,6 +59,16 @@ def create_app() -> Flask:
             count = result.scalar_one()
         return jsonify({"analysis_logs_count": count}), 200
 
+# Checking the database created the new exam tabel
+    @app.get("/db-check-exams")
+    def db_check_exams():
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            sessions = conn.execute(text("SELECT COUNT(*) FROM exam_sessions")).scalar_one()
+            turns = conn.execute(text("SELECT COUNT(*) FROM exam_turns")).scalar_one()
+        return jsonify({"exam_sessions_count": sessions, "exam_turns_count": turns}), 200
+
+
     # Calls the Index.html page also requires the user to be logged in
     @app.get("/")
     @login_required
@@ -78,6 +88,11 @@ def create_app() -> Flask:
     #If the file doesn't exist or is empty returns message.
     # Otherwise reads the file and returns it as text.
     #  AUDIT CLEAR
+
+    @app.get("/mock")
+    @login_required
+    def mock_exam_page():
+        return render_template("mock_exam.html")
 
     # This code is from ChatGPT
     @app.post("/audit/clear")

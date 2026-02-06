@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Mock Exam</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 680px; margin: 2rem auto; padding: 0 1rem; }
+    button, select { font-size: 1rem; padding: .6rem .9rem; margin-right: .5rem; }
+    .row { margin: 1rem 0; }
+    .box { border: 1px solid #ddd; border-radius: 8px; padding: .75rem; background:#fff; min-height: 2.2rem; }
+    .muted { color:#666; font-size:.95rem; }
+  </style>
+</head>
+<body>
+  <h1>Mock Exam</h1>
+  <p class="muted">This page is for the full mock exam flow (feedback at the end).</p>
+
+  <div class="row">
+    <a href="/">← Back to Practice</a>
+  </div>
+
+  <div class="row">
+    <label for="examLanguage"><strong>Language:</strong></label>
+    <select id="examLanguage">
+      <option value="english" selected>English</option>
+      <option value="french">French</option>
+      <option value="german">German</option>
+    </select>
+
+    <label for="difficulty"><strong>Difficulty:</strong></label>
+    <select id="difficulty">
+      <option value="beginner">Beginner</option>
+      <option value="moderate" selected>Moderate</option>
+      <option value="expert">Expert</option>
+    </select>
+  </div>
+
+  <div class="row">
+    <button id="startMockBtn" type="button">🎯 Start Mock Exam</button>
+  </div>
+
+  <div class="row">
+  <button id="startRecBtn" type="button">🎙️ Start Recording</button>
+  <button id="stopRecBtn" type="button" disabled>⏹️ Stop & Transcribe</button>
+</div>
+
+  <div class="row">
+  <button id="finishBtn" type="button" disabled>✅ Finish & Show Feedback</button>
+</div>
+
+<div class="row">
+  <strong>Final Feedback</strong>
+  <div id="finalFeedback" class="box"></div>
+</div>
+
+
+<div class="row">
+  <audio id="player" controls style="width:100%;"></audio>
+</div>
+
+
+  <div class="row">
+    <strong>Current Question</strong>
+    <div id="question" class="box"></div>
+  </div>
+
+  <div class="row">
+    <strong>Transcript</strong>
+    <div id="transcript" class="box"></div>
+  </div>
+
+  <div class="row muted" id="status">Idle.</div>
+
+<script>
+  const startMockBtn = document.getElementById('startMockBtn');
+  const statusEl = document.getElementById('status');
+  const questionEl = document.getElementById('question');
+  const transcriptEl = document.getElementById('transcript');
+
+  const examLangSel = document.getElementById('examLanguage');
+  const difficultySel = document.getElementById('difficulty');
+
+  sessionId = null;
+  questionNumber = null;
+
+  function setStatus(msg) {
+    statusEl.textContent = msg;
+  }
+
+ startMockBtn.addEventListener('click', async () => {
+  sessionId = null;
+  questionNumber = null;
+
+  setStatus('Starting mock exam…');
+  questionEl.textContent = '';
+  transcriptEl.textContent = '';
+
+
+    const language = examLangSel.value;      // "english" | "french" | "german"
+    const difficulty = difficultySel.value;  // "beginner" | "moderate" | "expert"
+
+    try {
+      const resp = await fetch('/api/exam/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ language, difficulty })
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || data.details || 'exam/start failed');
+
+      sessionId = data.session_id;
+      questionNumber = data.question_number;
+
+      questionEl.textContent = (data.question || '').trim() || '(no question returned)';
+      setStatus(`Mock exam started. Session ${sessionId}, Q${questionNumber}.`);
+
+    } catch (e) {
+      setStatus('Failed to start mock exam: ' + e.message);
+    }
+  });
+
+      const startRecBtn = document.getElementById('startRecBtn');
+  const stopRecBtn = document.getElementById('stopRecBtn');
+  const player = document.getElementById('player');
+
+  let mediaStream = null;
+  let recorder = null;
+  let chunks = [];
+
+  function pickMime() {
+    const candidates = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/mp4',
+      'audio/ogg;codecs=opus'
+    ];
+    for (const c of candidates) {
+      if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c)) return c;
+    }
+    return '';
+  }
+
+  async function startRecording() {
+    setStatus('Requesting microphone…');
+
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      setStatus('Microphone permission denied.');
+      return;
+    }
+
+    const mimeType = pickMime();
+    try {
+      recorder = new MediaRecorder(mediaStream, mimeType ? { mimeType } : undefined);
+    } catch (e) {
+      setStatus('MediaRecorder not supported for this mime.');
+      return;
+    }
+
+    chunks = [];
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) chunks.push(e.data);
+    };
+
+    recorder.start(); // keep it stable
+    startRecBtn.disabled = true;
+    stopRecBtn.disabled = false;
+    setStatus('Recording…');
+  }
+
+  function stopRecording() {
+    return new Promise((resolve) => {
+      if (!recorder) return resolve(null);
+
+      recorder.onstop = () => {
+        try { mediaStream.getTracks().forEach(t => t.stop()); } catch (_) {}
+        const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+        resolve(blob);
+      };
+
+      try { recorder.stop(); }
+      catch (_) { resolve(null); }
+    });
+  }
+
+  async function transcribeBlob(blob) {
+    if (!blob || blob.size < 2000) {
+      transcriptEl.textContent = '(no usable audio)';
+      setStatus('No usable audio captured.');
+          return '';
+
+    }
+
+    const filename = (blob.type || '').includes('mp4') ? 'speech.m4a' : 'speech.webm';
+    const form = new FormData();
+    form.append('file', blob, filename);
+
+    const sttLang =
+      examLangSel.value === 'french' ? 'fr' :
+      examLangSel.value === 'german' ? 'de' : 'en';
+    form.append('lang', sttLang);
+
+    setStatus('Transcribing…');
+
+    try {
+      const sttResp = await fetch('/api/stt', { method: 'POST', body: form });
+      const data = await sttResp.json();
+      if (!sttResp.ok) throw new Error(data.error || data.details || 'STT failed');
+
+         const transcript = (data.transcript || '').trim();
+    transcriptEl.textContent = transcript || '(empty transcript)';
+    setStatus('Transcription complete.');
+    return transcript;
+
+      } catch (e) {
+    setStatus('Transcription failed: ' + e.message);
+    return '';
+  }
+
+  }
+
+  startRecBtn.addEventListener('click', startRecording);
+
+  stopRecBtn.addEventListener('click', async () => {
+    stopRecBtn.disabled = true;
+    const blob = await stopRecording();
+
+    if (blob && blob.size > 0) {
+      player.src = URL.createObjectURL(blob);
+      await player.play().catch(()=>{});
+    }
+
+    startRecBtn.disabled = false;
+    const transcript = await transcribeBlob(blob);
+    await submitAnswerAndAdvance(transcript);
+
+    stopRecBtn.disabled = false;
+  });
+
+    async function submitAnswerAndAdvance(transcript) {
+  if (!sessionId || !questionNumber) {
+    setStatus('No active mock session. Click Start Mock Exam first.');
+    return;
+  }
+  if (!transcript) {
+    setStatus('Empty transcript — not saved.');
+    return;
+  }
+
+  setStatus(`Saving answer for session ${sessionId}, Q${questionNumber}…`);
+
+
+  try {
+    const resp = await fetch('/api/exam/answer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: sessionId,
+        question_number: Number(questionNumber),
+        transcript
+    })
+
+    });
+
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || data.details || 'exam/answer failed');
+
+    if (data.done) {
+  setStatus('Mock exam complete. Click Finish to see feedback.');
+  questionEl.textContent = '(completed)';
+  startRecBtn.disabled = true;
+  stopRecBtn.disabled = true;
+  finishBtn.disabled = false;
+  return;
+}
+
+
+    // Move to next question
+    questionNumber = data.question_number;
+    questionEl.textContent = (data.question || '').trim() || '(no question returned)';
+    setStatus(`Answer saved. Now on Q${questionNumber}.`);
+
+  } catch (e) {
+    setStatus('Could not save answer: ' + e.message);
+  }
+}
+
+
+
+    finishBtn.addEventListener('click', async () => {
+  if (!sessionId) {
+    setStatus('No session to finish.');
+    return;
+  }
+
+  setStatus('Generating final feedback…');
+  finalFeedbackEl.textContent = 'Working…';
+
+  try {
+    const resp = await fetch('/api/exam/finish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId })
+    });
+
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || data.details || 'exam/finish failed');
+
+    // For now: just show the raw JSON pretty-printed (we’ll format nicely next)
+    finalFeedbackEl.textContent = JSON.stringify(data, null, 2);
+    setStatus('Final feedback ready.');
+  } catch (e) {
+    finalFeedbackEl.textContent = 'Failed to generate feedback.';
+    setStatus('Finish failed: ' + e.message);
+  }
+});
+
+</script>
+
+</body>
+</html>

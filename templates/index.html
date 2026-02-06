@@ -2,42 +2,37 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Oral Exam Tool – Iteration 2</title>
+  <title>Oral Exam Tool – Iteration 4</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    /* This sets the basic page layout and inline CSS */
     body { font-family: system-ui, sans-serif; max-width: 680px; margin: 2rem auto; padding: 0 1rem; }
     button, select, input { font-size: 1rem; padding: .6rem .9rem; margin-right: .5rem; }
     .row { margin: 1rem 0; }
     .box { border: 1px solid #ddd; border-radius: 8px; padding: .75rem; background:#fff; min-height: 2.2rem; }
     .muted { color:#666; font-size:.95rem; }
-    .ok { color:#0a0; }   /* Green text for “success” status */
-    .err { color:#b00; }  /* Red text for “error” status   */
+    .ok { color:#0a0; }
+    .err { color:#b00; }
   </style>
 </head>
 <body>
-  <h1>Oral Exam Tool – Iteration 2</h1> <!-- Page title -->
+  <h1>Oral Exam Tool – Iteration 4</h1>
   <p class="muted">
-    Flow: Select <strong>difficulty</strong> and <strong>topic</strong> → Start Exam → Bot asks a question (TTS)
-    → You answer → STT → Feedback (spoken) → Retry same question (optional) → Next Question (when you click).
+    Practice mode: Start Practice → Question (TTS) → Record → STT → Feedback + Next Question (manual).<br>
+    Mock exam mode: Start Mock Exam → Fixed questions → Record → STT → English feedback + target corrected answer → Read corrected answer (button).
   </p>
 
   {% if current_user.is_authenticated %}
-  <p>Logged in as: <strong>{{ current_user.email }}</strong></p>
+    <p>Logged in as: <strong>{{ current_user.email }}</strong></p>
+    <form method="post" action="{{ url_for('auth.logout_post') }}">
+      <button type="submit">Logout</button>
+    </form>
+  {% else %}
+    <p>You are not logged in.</p>
+    <a href="{{ url_for('auth.login_get') }}">Login</a> |
+    <a href="{{ url_for('auth.signup_get') }}">Sign up</a>
+  {% endif %}
 
-  <form method="post" action="{{ url_for('auth.logout_post') }}">
-    <button type="submit">Logout</button>
-  </form>
-{% else %}
-  <p>You are not logged in.</p>
-  <a href="{{ url_for('auth.login_get') }}">Login</a> |
-  <a href="{{ url_for('auth.signup_get') }}">Sign up</a>
-{% endif %}
-
-
-  <!-- Difficulty and topic selection so the user can control the kind of practice -->
   <div class="row">
-    <!-- Difficulty dropdown: beginner / moderate / expert -->
     <label for="difficulty"><strong>Difficulty:</strong></label>
     <select id="difficulty">
       <option value="beginner">Beginner</option>
@@ -45,8 +40,6 @@
       <option value="expert">Expert</option>
     </select>
 
-
-          <!-- Exam language selection (saved to the user account) -->
     <label for="examLanguage"><strong>Language:</strong></label>
     <select id="examLanguage">
       <option value="english" selected>English</option>
@@ -54,8 +47,6 @@
       <option value="german">German</option>
     </select>
 
-
-    <!-- Topic dropdown: user chooses what to practise -->
     <label for="topic"><strong>Topic:</strong></label>
     <select id="topic">
       <option value="introducing yourself">Introducing yourself</option>
@@ -66,60 +57,51 @@
     </select>
   </div>
 
-  <!-- Button to start the exam – the student will be asked the first question -->
   <div class="row">
-    <button id="startExamBtn">📝 Start Exam (Get Question)</button>
+    <button id="startExamBtn" type="button">📝 Start Practice (Get Question)</button>
+    <button id="startMockExamBtn" type="button">🎯 Start Mock Exam</button>
+    <button id="readCorrectedBtn" type="button" disabled>🔊 Read Corrected Answer</button>
   </div>
 
-  <!-- Recording controls: start/stop recording -->
-<div class="row">
-  <button id="startBtn">🎙️ Start Recording</button>
-  <button id="stopBtn" disabled>⏹️ Stop & Get Feedback</button>
-</div>
+  <div class="row">
+    <button id="startBtn" type="button">🎙️ Start Recording</button>
+    <button id="stopBtn" type="button" disabled>⏹️ Stop & Get Feedback</button>
+  </div>
 
-
-  <!-- A small status line that shows what the system is doing (idle, recording, etc.) -->
   <div class="row muted" id="status">Idle.</div>
 
-  <!-- Box showing the current exam question from the bot -->
   <div class="row">
     <strong>Current Question</strong>
     <div id="question" class="box"></div>
   </div>
 
-  <!-- Box showing the student’s spoken answer as text (after STT) -->
   <div class="row">
     <strong>Your Answer – Transcript</strong>
     <div id="transcript" class="box"></div>
   </div>
 
-  <!-- Box showing feedback, corrected answer, tip and score -->
   <div class="row">
     <strong>Feedback</strong>
     <div id="feedback" class="box"></div>
   </div>
 
-  <!-- Buttons for retrying the same question, or moving on to the next one -->
   <div class="row">
-    <button id="retryBtn" disabled>🔁 Retry This Question</button>
-    <button id="nextQuestionBtn" disabled>➡️ Next Question</button>
+    <button id="retryBtn" type="button" disabled>🔁 Retry This Question</button>
+    <button id="nextQuestionBtn" type="button" disabled>➡️ Next Question</button>
   </div>
 
-  <!-- Audio player that will play TTS audio (questions or feedback) -->
   <div class="row">
     <audio id="player" controls style="width:100%;"></audio>
   </div>
 
-  <!-- Dictionary helper section -->
   <hr />
   <div class="row">
     <h2>Dictionary helper</h2>
     <p class="muted">
       Type a word or short phrase you don’t understand. The tool will explain it simply and give examples.
-      This uses the same AI as the exam, but in “mini dictionary” mode.
     </p>
     <input id="dictInput" type="text" placeholder="e.g. complicated, assignment, nervous before exam…" style="width:60%;" />
-    <button id="dictBtn">🔍 Explain</button>
+    <button id="dictBtn" type="button">🔍 Explain</button>
   </div>
 
   <div class="row">
@@ -127,512 +109,499 @@
     <div id="dictResult" class="box"></div>
   </div>
 
-  <script>
-    // This code is from ChatGPT
-    // Retrieves buttons, selectors, text areas and the audio player by ID.
-    // These variables let the JavaScript code interact with the page.
-    const startExamBtn    = document.getElementById('startExamBtn');
-    const startBtn        = document.getElementById('startBtn');
-    const stopBtn         = document.getElementById('stopBtn');
-    const retryBtn        = document.getElementById('retryBtn');
-    const nextQuestionBtn = document.getElementById('nextQuestionBtn');
+ <script>
+  const startExamBtn     = document.getElementById('startExamBtn');
+  const startMockExamBtn = document.getElementById('startMockExamBtn');
+  const readCorrectedBtn = document.getElementById('readCorrectedBtn');
 
-    // This code is from ChatGPT
-    const statusEl     = document.getElementById('status');
-    const questionEl   = document.getElementById('question');
-    const transcriptEl = document.getElementById('transcript');
-    const feedbackEl   = document.getElementById('feedback');
-    const player       = document.getElementById('player');
-    const difficultySel= document.getElementById('difficulty');
-    const topicSel     = document.getElementById('topic');
-    const examLangSel  = document.getElementById('examLanguage');
+  const startBtn        = document.getElementById('startBtn');
+  const stopBtn         = document.getElementById('stopBtn');
+  const retryBtn        = document.getElementById('retryBtn');
+  const nextQuestionBtn = document.getElementById('nextQuestionBtn');
 
+  const statusEl     = document.getElementById('status');
+  const questionEl   = document.getElementById('question');
+  const transcriptEl = document.getElementById('transcript');
+  const feedbackEl   = document.getElementById('feedback');
+  const player       = document.getElementById('player');
 
-    // This code is from ChatGPT
-    // Dictionary elements
-    const dictInput    = document.getElementById('dictInput');
-    const dictBtn      = document.getElementById('dictBtn');
-    const dictResultEl = document.getElementById('dictResult');
+  const difficultySel = document.getElementById('difficulty');
+  const topicSel      = document.getElementById('topic');
+  const examLangSel   = document.getElementById('examLanguage');
 
-    // This Code is from ChatGPT
-    //  State
-    // These variables remember the current microphone stream and recording state.
-    let mediaStream = null;       // Holds the live microphone audio stream
-    let recorder = null;          // MediaRecorder object that encodes the audio
-    let chunks = [];              // Small pieces of recorded audio
-    let currentQuestion = "";     // The last question currently active in the exam
-    let pendingNextQuestion = ""; // The next question returned by the AI, but not yet shown/spoken
+  const dictInput    = document.getElementById('dictInput');
+  const dictBtn      = document.getElementById('dictBtn');
+  const dictResultEl = document.getElementById('dictResult');
 
-    // This code is from ChatGPT
-    //  Helpers
-    // This function picks a suitable audio format depending on the browser.
-    function pickMime() {
-      const candidates = [
-        'audio/webm;codecs=opus', // Chrome/Edge
-        'audio/webm',
-        'audio/mp4',              // Safari fallback
-        'audio/ogg;codecs=opus'   // Firefox
-      ];
-      for (const c of candidates) {
-        if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c)) return c;
-      }
-      return '';
+  let mediaStream = null;
+  let recorder = null;
+  let chunks = [];
+
+  let currentQuestion = "";
+  let pendingNextQuestion = "";
+
+  let examMode = "practice"; // "practice" | "mock"
+  let mockSessionId = null;
+  let mockQuestionNumber = null;
+
+  let lastCorrectedAnswerTarget = "";
+
+  function pickMime() {
+    const candidates = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/mp4',
+      'audio/ogg;codecs=opus'
+    ];
+    for (const c of candidates) {
+      if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c)) return c;
+    }
+    return '';
+  }
+
+  function setStatus(msg, cls = '') {
+    statusEl.className = 'muted ' + cls;
+    statusEl.textContent = msg;
+  }
+
+  function stopAudio() {
+    try {
+      player.pause();
+      player.currentTime = 0;
+      const src = player.src;
+      player.src = '';
+      player.src = src;
+    } catch (_) {}
+  }
+
+ async function speakText(text) {
+  if (!text) return;
+  setStatus('Speaking…', 'ok');
+  stopAudio();
+
+  const voice =
+    examLangSel?.value === 'french' ? 'shimmer' :
+    examLangSel?.value === 'german' ? 'nova' :
+    'alloy';
+
+  try {
+    const ttsResp = await fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voice })
+    });
+
+    if (!ttsResp.ok) {
+      const j = await ttsResp.json().catch(()=>({}));
+      throw new Error(j.details || j.error || 'TTS failed');
     }
 
-    // This code is from ChatGPT
-    // Central place to update the status line and colour (ok / error).
-    function setStatus(msg, cls = '') {
-      statusEl.className = 'muted ' + cls;
-      statusEl.textContent = msg;
-    }
+    const audioBlob = await ttsResp.blob();
+    player.src = URL.createObjectURL(audioBlob);
+    await player.play().catch(()=>{});
+  } catch (e) {
+    setStatus('TTS failed: ' + e.message, 'err');
+  }
+}
 
-    // This code is from ChatGPT
-    // Stops any currently playing audio and resets the audio element.
-    // Stops any currently playing audio and resets the audio element.
-    function stopAudio() {
+
+  async function loadUserPreferences() {
+    try {
+      const resp = await fetch('/api/user/preferences', { credentials: 'same-origin' });
+      if (!resp.ok) return;
+      const prefs = await resp.json();
+
+      if (prefs.preferred_difficulty && difficultySel) difficultySel.value = prefs.preferred_difficulty;
+      if (prefs.preferred_language && examLangSel) examLangSel.value = prefs.preferred_language;
+    } catch (e) {
+      console.warn('Could not load preferences:', e);
+    }
+  }
+
+  let prefsSaveTimer = null;
+  function scheduleSaveUserPreferences() {
+    if (prefsSaveTimer) clearTimeout(prefsSaveTimer);
+    prefsSaveTimer = setTimeout(async () => {
       try {
-        player.pause();
-        player.currentTime = 0;
-        const src = player.src;
-        player.src = '';
-        player.src = src;
-      } catch (_) {}
-    }
-
-    // ----------------------------
-    // User Preferences (saved per account)
-    // ----------------------------
-
-    async function loadUserPreferences() {
-      try {
-        const resp = await fetch('/api/user/preferences', { credentials: 'same-origin' });
-        if (!resp.ok) return;
-
-        const prefs = await resp.json();
-
-        if (prefs.preferred_difficulty && difficultySel) {
-          difficultySel.value = prefs.preferred_difficulty;
-        }
-
-        if (prefs.preferred_language && examLangSel) {
-          examLangSel.value = prefs.preferred_language;
-        }
-      } catch (e) {
-        console.warn('Could not load preferences:', e);
-      }
-    }
-
-    let prefsSaveTimer = null;
-
-    function scheduleSaveUserPreferences() {
-      if (prefsSaveTimer) clearTimeout(prefsSaveTimer);
-
-      prefsSaveTimer = setTimeout(async () => {
-        try {
-          const payload = {
-            preferred_language: examLangSel ? examLangSel.value : 'english',
-            preferred_difficulty: difficultySel ? difficultySel.value : 'moderate'
-          };
-
-          await fetch('/api/user/preferences', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify(payload)
-          });
-        } catch (e) {
-          console.warn('Could not save preferences:', e);
-        }
-      }, 200);
-    }
-
-{
-      try {
-        player.pause();
-        player.currentTime = 0;
-        const src = player.src;
-        player.src = '';
-        player.src = src;
-      } catch (_) {}
-    }
-
-    // This code is from ChatGPT
-    // This function sends text to the backend /api/tts endpoint,
-    // gets back an audio file (MP3), and plays it in the audio player.
-    async function speakText(text) {
-      if (!text) return;
-      setStatus('Speaking…', 'ok');
-      stopAudio();
-      try {
-        const ttsResp = await fetch('/api/tts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, voice: 'alloy' }) // The server will return MP3 audio
-        });
-        if (!ttsResp.ok) {
-          const j = await ttsResp.json().catch(()=>({}));
-          throw new Error(j.details || j.error || 'TTS failed');
-        }
-        const audioBlob = await ttsResp.blob();         // Read audio bytes
-        player.src = URL.createObjectURL(audioBlob);    // Turn bytes into a playable URL
-        await player.play().catch(()=>{ /* may need a user click on some browsers */ });
-      } catch (e) {
-        setStatus('TTS failed: ' + e.message, 'err');
-      }
-    }
-
-    // This code is from ChatGPT
-    //  Recording
-    // This function asks for microphone permission and starts recording audio.
-    async function startRecording() {
-      setStatus('Requesting microphone…');
-      stopAudio();
-
-      // Check if the browser supports microphone input.
-      if (!navigator.mediaDevices?.getUserMedia) {
-        setStatus('Microphone not available in this browser.', 'err');
-        return;
-      }
-
-      // Ask the user for permission to use the microphone.
-      try {
-        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      } catch (e) {
-        setStatus('Microphone permission denied.', 'err');
-        return;
-      }
-
-      const mimeType = pickMime();
-      try {
-        // Create a MediaRecorder that will capture the microphone audio.
-        recorder = new MediaRecorder(mediaStream, mimeType ? { mimeType } : undefined);
-      } catch (e) {
-        setStatus('MediaRecorder not supported for this mime.', 'err');
-        return;
-      }
-
-      // Each time the recorder has data, store it in the chunks array.
-      chunks = [];
-      recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
-
-      // Start recording.
-      recorder.start();
-      startBtn.disabled = true;      // Disable Start button while recording
-      stopBtn.disabled  = false;     // Enable Stop button
-      setStatus('Recording…', 'ok');
-    }
-
-    // This function stops the recording and returns a single audio Blob.
-    function stopRecording() {
-      return new Promise((resolve) => {
-        if (!recorder) { resolve(null); return; }
-        recorder.onstop = () => {
-          // Stop using the microphone once recording is finished.
-          try { mediaStream.getTracks().forEach(t => t.stop()); } catch (_) {}
-          // Combine all the audio chunks into one Blob (audio file in memory).
-          const blob = new Blob(chunks, { type: (recorder && recorder.mimeType) ? recorder.mimeType : 'audio/webm' });
-          console.log('Recorder mime:', recorder ? recorder.mimeType : '(none)', 'size:', blob.size);
-          resolve(blob);
+        const payload = {
+          preferred_language: examLangSel ? examLangSel.value : 'english',
+          preferred_difficulty: difficultySel ? difficultySel.value : 'moderate'
         };
-        try { recorder.stop(); } catch (_) { resolve(null); }
+        await fetch('/api/user/preferences', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify(payload)
+        });
+      } catch (e) {
+        console.warn('Could not save preferences:', e);
+      }
+    }, 200);
+  }
+
+  async function startRecording() {
+    setStatus('Requesting microphone…');
+    stopAudio();
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setStatus('Microphone not available in this browser.', 'err');
+      return;
+    }
+
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      setStatus('Microphone permission denied.', 'err');
+      return;
+    }
+
+    const mimeType = pickMime();
+    try {
+      recorder = new MediaRecorder(mediaStream, mimeType ? { mimeType } : undefined);
+    } catch (e) {
+      setStatus('MediaRecorder not supported for this mime.', 'err');
+      return;
+    }
+
+    console.log("Recorder mime:", recorder.mimeType);
+
+    chunks = [];
+    recorder.ondataavailable = (e) => {
+      console.log("dataavailable size:", e.data?.size);
+      if (e.data && e.data.size > 0) chunks.push(e.data);
+    };
+
+    recorder.start(250);
+    startBtn.disabled = true;
+    stopBtn.disabled  = false;
+    setStatus('Recording…', 'ok');
+  }
+
+  function stopRecording() {
+    return new Promise((resolve) => {
+      if (!recorder) { resolve(null); return; }
+
+      recorder.onstop = () => {
+        try { mediaStream.getTracks().forEach(t => t.stop()); } catch (_) {}
+        const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+        resolve(blob);
+      };
+
+      try {
+        if (recorder.state === "recording" && recorder.requestData) recorder.requestData();
+        recorder.stop();
+      } catch (_) {
+        resolve(null);
+      }
+    });
+  }
+
+  async function startExamPractice() {
+    examMode = "practice";
+    mockSessionId = null;
+    mockQuestionNumber = null;
+    lastCorrectedAnswerTarget = "";
+    readCorrectedBtn.disabled = true;
+
+    setStatus('Starting practice…');
+    questionEl.textContent = '';
+    transcriptEl.textContent = '';
+    feedbackEl.textContent = '';
+    pendingNextQuestion = '';
+    retryBtn.disabled = true;
+    nextQuestionBtn.disabled = true;
+    const difficulty = difficultySel.value;
+    const topic = topicSel.value;
+    const language = examLangSel ? examLangSel.value : 'english';
+    lastCorrectedAnswerTarget = '';
+    readCorrectedBtn.disabled = true;
+
+
+    try {
+      const resp = await fetch('/api/start_exam', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic, difficulty, language })
       });
-    }
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || data.details || 'start_exam failed');
 
-    // This Code is from ChatGPT
-    // Start exam (get first question from bot)
-    // This function calls /api/start_exam on the backend.
-    // The AI generates the first oral-exam question, using the chosen difficulty and topic.
-    async function startExam() {
-      setStatus('Starting exam…');
-      questionEl.textContent   = '';
-      transcriptEl.textContent = '';
-      feedbackEl.textContent   = '';
-      pendingNextQuestion      = '';
-      retryBtn.disabled        = true;
-      nextQuestionBtn.disabled = true;
-
-      // Read the selected difficulty and topic from the dropdowns.
-      const difficulty = difficultySel.value;   // "beginner", "moderate" or "expert"
-      const topic      = topicSel.value;        // e.g. "school life"
-      const language   = examLangSel ? examLangSel.value : 'english';
-
-      try {
-        const resp = await fetch('/api/start_exam', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ topic, difficulty, language })
-        });
-        const data = await resp.json();
-        console.log('start_exam:', data);
-        if (!resp.ok) throw new Error(data.error || data.details || 'start_exam failed');
-
-        // Save and display the question from the AI.
-        currentQuestion = (data.question || '').trim();
-        questionEl.textContent = currentQuestion || '(no question returned)';
-        if (!currentQuestion) {
-          setStatus('No question returned from the server.', 'err');
-          return;
-        }
-
-        setStatus('Exam started. Listen to the question, then record your answer.', 'ok');
-
-        // Use TTS so the student hears the question.
-        await speakText(currentQuestion);
-      } catch (e) {
-        setStatus('Could not start exam: ' + e.message, 'err');
-      }
-    }
-
-    // This code is from ChatGPT
-    //  Pipeline: STT -> exam_turn (feedback + store next question)
-    // This function runs after the user finishes speaking.
-    // 1) Sends audio to /api/stt (speech-to-text)
-    // 2) Sends transcript + last question + difficulty + topic to /api/exam_turn
-    // 3) Shows feedback (and speaks it) and stores the next question for later.
-    async function processAudioBlob(blob) {
-      // Quick check: very tiny blobs are often silence or failed captures.
-      if (!blob || blob.size < 2000) {
-        setStatus(`No usable audio captured (size=${blob ? blob.size : 0}).`, 'err');
-        transcriptEl.textContent = '(no speech detected)';
-        return;
-      }
-
-      // If there is no question yet, the student has not started the exam properly.
+      currentQuestion = (data.question || '').trim();
+      questionEl.textContent = currentQuestion || '(no question returned)';
       if (!currentQuestion) {
-        setStatus('No current question. Click "Start Exam (Get Question)" first.', 'err');
+        setStatus('No question returned from the server.', 'err');
         return;
       }
 
-      // Read the difficulty and topic again so the backend knows the context.
-      const difficulty = difficultySel.value;
-      const topic      = topicSel.value;
-      const language   = examLangSel ? examLangSel.value : 'english';
-
-      // 1) STT (Speech-to-Text): send audio to /api/stt
-      setStatus('Transcribing…');
-      const filename = ((recorder && recorder.mimeType) || '').includes('mp4') ? 'speech.m4a' : 'speech.webm';
-      const form = new FormData();
-      form.append('file', blob, filename);              // The recorded audio
-      const sttLang = examLangSel ? (examLangSel.value === 'french' ? 'fr' : examLangSel.value === 'german' ? 'de' : 'en-GB') : 'en-GB';
-form.append('lang', sttLang);
-
-
-      let transcript = '';
-      try {
-        const sttResp = await fetch('/api/stt', { method: 'POST', body: form });
-        const sttJson = await sttResp.json();
-        console.log('STT:', sttJson);
-        if (!sttResp.ok) throw new Error(sttJson.error || 'STT failed');
-        transcript = (sttJson.transcript || '').trim(); // Extract the text
-      } catch (e) {
-        setStatus('Transcription failed: ' + e.message, 'err');
-        return;
-      }
-      transcriptEl.textContent = transcript || '(empty transcript)';
-      if (!transcript) { setStatus('Empty transcript.', 'err'); return; }
-
-      // 2) exam_turn: send the transcript + last question + difficulty + topic to /api/exam_turn.
-      setStatus('Getting feedback and next question…');
-      try {
-        const fbResp = await fetch('/api/exam_turn', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            transcript,
-            last_question: currentQuestion,
-            topic,
-            difficulty,
-            language
-         })
-
-        });
-        const fbJson = await fbResp.json();
-        console.log('exam_turn:', fbJson);
-        if (!fbResp.ok) throw new Error(fbJson.error || fbJson.details || 'exam_turn failed');
-
-        const feedback  = (fbJson.feedback || '').trim();
-        const corrected = (fbJson.corrected_answer || '').trim();
-        const tip       = (fbJson.tip || '').trim();
-        const score     = fbJson.score;
-
-        // Show a structured block of feedback (easier to read for the student).
-        feedbackEl.innerHTML = `
-          <p><strong>Overall feedback:</strong><br>${feedback || '(no feedback)'}</p>
-          <p><strong>Corrected answer:</strong><br>${corrected || '(none provided)'}</p>
-          <p><strong>Tip:</strong><br>${tip || '(none provided)'}</p>
-          <p><strong>Score:</strong> ${score != null ? score : '(no score)'}</p>
-        `;
-
-        // Speak the feedback so the student can listen to it.
-        if (feedback) {
-          await speakText(feedback);
-        }
-
-        // Store the next question but DO NOT ask it yet.
-        pendingNextQuestion = (fbJson.next_question || '').trim();
-
-        // After feedback: they can retry this question, or move to the next (if available)
-        retryBtn.disabled        = false;
-        nextQuestionBtn.disabled = !pendingNextQuestion;
-
-        if (pendingNextQuestion) {
-          setStatus('Feedback finished. You can retry this question, or click "Next Question" when you are ready.', 'ok');
-        } else {
-          setStatus('No next question returned. You can retry this question again if you like.', 'ok');
-        }
-
-      } catch (e) {
-        setStatus('Exam turn failed: ' + e.message, 'err');
-        return;
-      }
-    }
-
-    //  Retry Question flow
-    // This function is called when the user clicks the "Retry This Question" button.
-    // It keeps the same currentQuestion, discards the stored next question,
-    // clears the transcript and feedback, and replays the question via TTS.
-    async function retryQuestion() {
-      if (!currentQuestion) {
-        setStatus('No question to retry yet. Start the exam first.', 'err');
-        return;
-      }
-
-      // Discard any next question that was prepared earlier.
-      pendingNextQuestion = '';
-      nextQuestionBtn.disabled = true;
-
-      // Clear previous transcript and feedback so the student starts fresh.
-      transcriptEl.textContent = '';
-      feedbackEl.textContent   = '';
-
-      setStatus('Retrying the same question. Listen and record a new answer.', 'ok');
+      setStatus('Practice started. Listen to the question, then record your answer.', 'ok');
       await speakText(currentQuestion);
+    } catch (e) {
+      setStatus('Could not start practice: ' + e.message, 'err');
     }
+  }
 
-    //  Next Question flow
-    // This function is called when the user clicks the "Next Question" button.
-    // It uses the stored pendingNextQuestion, shows it, and speaks it.
-    async function goToNextQuestion() {
-      if (!pendingNextQuestion) {
-        setStatus('No next question available yet. Answer a question first, or use Retry.', 'err');
-        return;
-      }
+  async function startMockExam() {
+    examMode = "mock";
+    lastCorrectedAnswerTarget = "";
+    readCorrectedBtn.disabled = true;
 
-      // Promote the pending next question to the current question.
-      currentQuestion = pendingNextQuestion;
-      pendingNextQuestion = '';
-      nextQuestionBtn.disabled = true;
+    setStatus('Starting mock exam…');
+    questionEl.textContent = '';
+    transcriptEl.textContent = '';
+    feedbackEl.textContent = '';
+    pendingNextQuestion = '';
+    retryBtn.disabled = true;
+    nextQuestionBtn.disabled = true;
 
-      // After moving on, student can retry this *new* question later,
-      // but now we clear the old transcript/feedback.
-      transcriptEl.textContent = '';
-      feedbackEl.textContent   = '';
-      retryBtn.disabled        = true; // they haven't answered the new question yet
+    const language = examLangSel ? examLangSel.value : 'english';
+    const difficulty = difficultySel ? difficultySel.value : 'moderate';
 
-      // Show the new question and speak it.
-      questionEl.textContent = currentQuestion;
-      setStatus('Listen to the next question, then record your answer.', 'ok');
+    try {
+      const resp = await fetch('/api/exam/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ language, difficulty })
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || data.details || 'exam/start failed');
+
+      mockSessionId = data.session_id;
+      mockQuestionNumber = data.question_number;
+
+      currentQuestion = (data.question || '').trim();
+      questionEl.textContent = currentQuestion || '(no question returned)';
+
+      setStatus('Mock exam started. Listen to the question, then record your answer.', 'ok');
       await speakText(currentQuestion);
+    } catch (e) {
+      setStatus('Could not start mock exam: ' + e.message, 'err');
+    }
+  }
+
+  async function processAudioBlob(blob) {
+  if (!blob || blob.size < 2000) {
+    setStatus(`No usable audio captured (size=${blob ? blob.size : 0}).`, 'err');
+    transcriptEl.textContent = '(no speech detected)';
+    return;
+  }
+
+  if (!currentQuestion) {
+    setStatus('No current question. Start practice/mock exam first.', 'err');
+    return;
+  }
+
+  // ---- STT ----
+  const filename = (blob.type || '').includes('mp4') ? 'speech.m4a' : 'speech.webm';
+  const form = new FormData();
+  form.append('file', blob, filename);
+
+  const sttLang =
+    examLangSel?.value === 'french' ? 'fr' :
+    examLangSel?.value === 'german' ? 'de' : 'en';
+  form.append('lang', sttLang);
+
+  setStatus('Transcribing…');
+  let transcript = '';
+
+  try {
+    const sttResp = await fetch('/api/stt', { method: 'POST', body: form });
+    const data = await sttResp.json();
+    if (!sttResp.ok) throw new Error(data.error || data.details || 'STT failed');
+    transcript = (data.transcript || '').trim();
+  } catch (e) {
+    setStatus('Transcription failed: ' + e.message, 'err');
+    return;
+  }
+
+  transcriptEl.textContent = transcript || '(empty transcript)';
+  if (!transcript) {
+    setStatus('Empty transcript.', 'err');
+    return;
+  }
+
+  // ---- PRACTICE FEEDBACK (immediate, every time) ----
+  if (examMode === "practice") {
+    setStatus('Getting feedback…', 'ok');
+    feedbackEl.textContent = '';
+    pendingNextQuestion = '';
+    retryBtn.disabled = true;
+    nextQuestionBtn.disabled = true;
+
+    const topic = topicSel.value;
+    const difficulty = difficultySel.value;
+    const language = examLangSel.value; // "english" | "french" | "german"
+
+    try {
+      const resp = await fetch('/api/exam_turn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript,
+          last_question: currentQuestion,
+          topic,
+          difficulty,
+          language
+        })
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || data.details || 'exam_turn failed');
+
+      // Show feedback
+      const feedback = (data.feedback || '').trim();
+const corrected = (data.corrected_answer || '').trim();
+
+// 🔊 store corrected answer so it can be spoken
+lastCorrectedAnswerTarget = (corrected && corrected !== 'NO_CHANGES_NEEDED') ? corrected : '';
+readCorrectedBtn.disabled = !lastCorrectedAnswerTarget;
+
+
+const tip = (data.tip || '').trim();
+const score = data.score;
+
+
+
+
+      let out = '';
+      if (feedback) out += feedback;
+      if (corrected && corrected !== 'NO_CHANGES_NEEDED') {
+  out += `\n\nCorrected answer:\n${corrected}`;
+}
+      if (tip) out += `\n\nTip:\n${tip}`;
+      if (score !== null && score !== undefined) out += `\n\nScore: ${score}/10`;
+
+      feedbackEl.textContent = out || '(no feedback returned)';
+
+      pendingNextQuestion = (data.next_question || '').trim();
+      retryBtn.disabled = false;
+      nextQuestionBtn.disabled = !pendingNextQuestion;
+
+      setStatus('Feedback ready.', 'ok');
+    } catch (e) {
+      setStatus('Feedback failed: ' + e.message, 'err');
+      retryBtn.disabled = false; // allow retry even if feedback fails
     }
 
-    //  Dictionary helper
-    // This function calls /api/dictionary_ai with the term and current difficulty.
-    // It then shows a simple meaning, examples and synonyms in the box.
-    async function lookupDictionary() {
-      const term = (dictInput.value || '').trim();
-      if (!term) {
-        setStatus('Please type a word or phrase to explain.', 'err');
-        dictResultEl.textContent = '(no word entered)';
-        return;
-      }
+    return;
+  }
 
-      setStatus(`Looking up "${term}"…`, 'ok');
-      dictResultEl.textContent = 'Looking up…';
+  // ---- MOCK MODE (no feedback here) ----
+  setStatus('Done transcribing (mock mode).', 'ok');
+}
 
-      const difficulty = difficultySel.value; // use same difficulty as exam
 
-      try {
-        const resp = await fetch('/api/dictionary_ai', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ term, difficulty })
-        });
-        const data = await resp.json();
-        console.log('dictionary_ai:', data);
-        if (!resp.ok) throw new Error(data.error || data.details || 'dictionary_ai failed');
-
-        const headword = data.headword || term;
-        const pos      = data.part_of_speech || '';
-        const meaning  = data.meaning || '(no meaning returned)';
-        const examples = Array.isArray(data.examples) ? data.examples : [];
-        const synonyms = Array.isArray(data.synonyms) ? data.synonyms : [];
-
-        let html = `<p><strong>${headword}</strong>${pos ? ' (' + pos + ')' : ''}</p>`;
-        html += `<p>${meaning}</p>`;
-
-        if (examples.length) {
-          html += '<p><strong>Examples:</strong><br>';
-          html += '<ul>';
-          for (const ex of examples) {
-            html += `<li>${ex}</li>`;
-          }
-          html += '</ul></p>';
-        }
-
-        if (synonyms.length) {
-          html += `<p><strong>Synonyms:</strong> ${synonyms.join(', ')}</p>`;
-        }
-
-        dictResultEl.innerHTML = html;
-        setStatus('Dictionary result ready.', 'ok');
-      } catch (e) {
-        dictResultEl.textContent = 'Could not get a dictionary result.';
-        setStatus('Dictionary lookup failed: ' + e.message, 'err');
-      }
+  async function lookupDictionary() {
+    const term = (dictInput.value || '').trim();
+    if (!term) {
+      setStatus('Please type a word or phrase to explain.', 'err');
+      dictResultEl.textContent = '(no word entered)';
+      return;
     }
 
-    //  Wire up buttons
-    // When the user clicks “Start Exam”, the bot generates and speaks the first question.
-    startExamBtn.addEventListener('click', startExam);
+    setStatus(`Looking up "${term}"…`, 'ok');
+    dictResultEl.textContent = 'Looking up…';
 
-    // When the user clicks “Start Recording”, we begin capturing microphone audio.
-    startBtn.addEventListener('click', startRecording);
+    const difficulty = difficultySel.value;
 
-    // When the user clicks “Stop & Get Feedback”, we stop recording,
-    // send the audio through the pipeline, and get feedback + the next question (stored).
-    stopBtn.addEventListener('click', async () => {
-      stopBtn.disabled = true;          // Prevent double-clicking while we stop
-      const blob = await stopRecording();
-      startBtn.disabled = false;        // Re-enable Start button
-      await processAudioBlob(blob);     // Run STT + exam_turn
-      stopBtn.disabled = false;         // Allow the user to record again
-    });
+    try {
+      const resp = await fetch('/api/dictionary_ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ term, difficulty })
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || data.details || 'dictionary_ai failed');
 
+      const headword = data.headword || term;
+      const pos      = data.part_of_speech || '';
+      const meaning  = data.meaning || '(no meaning returned)';
+      const examples = Array.isArray(data.examples) ? data.examples : [];
+      const synonyms = Array.isArray(data.synonyms) ? data.synonyms : [];
 
-        // Load saved preferences on page load
-    window.addEventListener('DOMContentLoaded', loadUserPreferences);
+      let html = `<p><strong>${headword}</strong>${pos ? ' (' + pos + ')' : ''}</p>`;
+      html += `<p>${meaning}</p>`;
 
-    // Save preferences when changed
-if (difficultySel) difficultySel.addEventListener('change', scheduleSaveUserPreferences);
-if (examLangSel) examLangSel.addEventListener('change', scheduleSaveUserPreferences);
-
-
-    // When the user clicks “Retry This Question”, replay the same question and reset transcript/feedback.
-    retryBtn.addEventListener('click', retryQuestion);
-
-    // When the user clicks “Next Question”, we show and speak the stored next question.
-    nextQuestionBtn.addEventListener('click', goToNextQuestion);
-
-    // When the user clicks “Explain” in the dictionary section, look up the word.
-    dictBtn.addEventListener('click', lookupDictionary);
-
-    // Also allow pressing Enter inside the dictionary input to trigger lookup.
-    dictInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        lookupDictionary();
+      if (examples.length) {
+        html += '<p><strong>Examples:</strong><ul>';
+        for (const ex of examples) html += `<li>${ex}</li>`;
+        html += '</ul></p>';
       }
-    });
-  </script>
+
+      if (synonyms.length) {
+        html += `<p><strong>Synonyms:</strong> ${synonyms.join(', ')}</p>`;
+      }
+
+      dictResultEl.innerHTML = html;
+      setStatus('Dictionary result ready.', 'ok');
+    } catch (e) {
+      dictResultEl.textContent = 'Could not get a dictionary result.';
+      setStatus('Dictionary lookup failed: ' + e.message, 'err');
+    }
+  }
+
+  // Wire up events
+  startExamBtn.addEventListener('click', startExamPractice);
+  startMockExamBtn.addEventListener('click', () => {
+  window.location.href = '/mock';
+});
+
+retryBtn.addEventListener('click', async () => {
+  transcriptEl.textContent = '';
+  feedbackEl.textContent = '';
+  setStatus('Retry: listen to the question again, then record.', 'ok');
+  await speakText(currentQuestion);
+});
+
+nextQuestionBtn.addEventListener('click', async () => {
+  if (!pendingNextQuestion) return;
+  currentQuestion = pendingNextQuestion;
+  lastCorrectedAnswerTarget = '';
+  readCorrectedBtn.disabled = true;
+  pendingNextQuestion = '';
+
+  questionEl.textContent = currentQuestion;
+  transcriptEl.textContent = '';
+  feedbackEl.textContent = '';
+  retryBtn.disabled = true;
+  nextQuestionBtn.disabled = true;
+
+  setStatus('Next question ready. Listen, then record.', 'ok');
+  await speakText(currentQuestion);
+});
+
+
+  readCorrectedBtn.addEventListener('click', async () => {
+    if (!lastCorrectedAnswerTarget) return;
+    await speakText(lastCorrectedAnswerTarget);
+  });
+
+  startBtn.addEventListener('click', startRecording);
+
+  stopBtn.addEventListener('click', async () => {
+    stopBtn.disabled = true;
+    const blob = await stopRecording();
+    console.log("Recorded blob:", blob?.type, blob?.size);
+
+
+    startBtn.disabled = false;
+    await processAudioBlob(blob);
+    stopBtn.disabled = false;
+  });
+
+  dictBtn.addEventListener('click', lookupDictionary);
+
+  dictInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      lookupDictionary();
+    }
+  });
+
+  window.addEventListener('DOMContentLoaded', loadUserPreferences);
+  if (difficultySel) difficultySel.addEventListener('change', scheduleSaveUserPreferences);
+  if (examLangSel) examLangSel.addEventListener('change', scheduleSaveUserPreferences);
+</script>
+
 </body>
 </html>
+

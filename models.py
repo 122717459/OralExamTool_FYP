@@ -7,6 +7,8 @@ from datetime import datetime
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import Column, Integer, Text, String, DateTime, func, ForeignKey, Boolean
+from sqlalchemy.orm import relationship
+from sqlalchemy import UniqueConstraint
 
 
 # Import the Base class made in db.py, this links our model to the database setup
@@ -36,10 +38,72 @@ class AnalysisLog(Base):
     # Name of the AI model used, stored as a short string (limit 120 chars)
     model_name = Column(String(120), nullable=False)
 
+class ExamSession(Base):
+    __tablename__ = "exam_sessions"
 
-    # Timestamp for when the record was created
-    # server_default=func.now() means the database automatically fills this in
-    # using the current time — we don’t need to set it manually in Python
+    id = Column(Integer, primary_key=True)
+
+    # Every exam belongs to a user
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+
+    # store exam config at the time it started
+    language = Column(String(20), nullable=False)  # english/french/german
+    difficulty = Column(String(20), nullable=False)  # beginner/moderate/expert
+
+    status = Column(String(20), nullable=False, default="in_progress")
+    started_at = Column(DateTime, server_default=func.now(), nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+
+    # end-of-exam summary (we’ll fill these later)
+    overall_band = Column(String(20), nullable=True)  # Excellent/Good/OK/Needs Work
+    summary_feedback_en = Column(Text, nullable=True)
+    major_mistakes_en = Column(Text, nullable=True)
+
+    # relationship to turns
+    turns = relationship(
+        "ExamTurn",
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="ExamTurn.question_number",
+    )
+
+class ExamTurn(Base):
+    __tablename__ = "exam_turns"
+
+    id = Column(Integer, primary_key=True)
+
+    session_id = Column(Integer, ForeignKey("exam_sessions.id"), nullable=False, index=True)
+
+    question_number = Column(Integer, nullable=False)  # 1..N
+    section = Column(String(50), nullable=False)  # introduction/school/etc
+    question_text = Column(Text, nullable=False)
+
+    transcript = Column(Text, nullable=True)
+
+    # Iteration 4 rule:
+    # feedback = English, corrected answer = target language
+    feedback_en = Column(Text, nullable=True)
+    corrected_answer_target = Column(Text, nullable=True)
+    tips_en = Column(Text, nullable=True)
+
+    # band scoring
+    fluency_band = Column(String(20), nullable=True)
+    grammar_band = Column(String(20), nullable=True)
+    vocabulary_band = Column(String(20), nullable=True)
+    pronunciation_band = Column(String(20), nullable=True)
+    overall_band = Column(String(20), nullable=True)
+
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+    session = relationship("ExamSession", back_populates="turns")
+
+    __table_args__ = (
+        UniqueConstraint("session_id", "question_number", name="uq_exam_session_question_number"),
+    )
+
+# Timestamp for when the record was created
+# server_default=func.now() means the database automatically fills this in
+# using the current time — we don’t need to set it manually in Python
     created_at = Column(DateTime, server_default=func.now())
 # This tabel represents the users table. It stores login credentials for each user.
 class User(UserMixin, Base):
@@ -53,6 +117,8 @@ class User(UserMixin, Base):
     password_hash = Column(String(255), nullable=False)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    exam_sessions = relationship("ExamSession", cascade="all, delete-orphan")
 
     # Admin flag (developer/supervisor account).
     is_admin = Column(Boolean, default=False, nullable=False)

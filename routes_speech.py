@@ -106,7 +106,18 @@ def answer_stream(): # Reads q and optional system from query params
 def tts(): # Registers a post endpoint /tts inside the bp_speech blueprint, This will be called whenever a client sends text to convert into speech
     data = request.get_json(force=True) or {} # Parses the incoming JSON body.
     text = (data.get("text") or "").strip() #Extracts text: the text to speak
-    voice = (data.get("voice") or "alloy").strip() # optional, defaults to "alloy" (one of the available model voices)
+    language = (data.get("language") or "").strip().lower()
+
+    # Default voices per language (tweak as you like)
+    voice_by_language = {
+        "english": "alloy",
+        "french": "nova",
+        "german": "alloy",
+    }
+
+    # If frontend passes voice explicitly, respect it.
+    # Otherwise pick by language, fallback to alloy.
+    voice = (data.get("voice") or voice_by_language.get(language) or "alloy").strip()
 
     if not text:
         return jsonify({"error": "text is required"}), 400 # Validation the text field must be provided

@@ -5,9 +5,12 @@ from flask import Flask, jsonify, render_template
 from pathlib import Path
 from flask_login import LoginManager
 from flask_login import login_required
+from mock_exam import mock_exam_bp
+
 
 # DB setup
 from db import engine, Base, SessionLocal
+
 
 
 # Ensure models are imported so SQLAlchemy knows about them noqa f401 stops warning
@@ -98,7 +101,7 @@ def create_app() -> Flask:
     @app.post("/audit/clear")
     @login_required
     def audit_clear():
-        Path("supervisor_log.txt").write_text("", encoding="utf-8")
+        Path("supervis or_log.txt").write_text("", encoding="utf-8")
         return jsonify({"status": "cleared"}), 200
 
     #  REGISTER BLUEPRINTS-
@@ -111,6 +114,7 @@ def create_app() -> Flask:
     app.register_blueprint(bp_auth)     # ( for user login)
     app.register_blueprint(bp_admin)  # /admin/... (admin-only)
     app.register_blueprint(bp_user)  # /api/user/... (user preferences)
+    app.register_blueprint(mock_exam_bp)
 
     # Optional: simple 404 for convenience during dev
     @app.errorhandler(404)

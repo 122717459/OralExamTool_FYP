@@ -46,6 +46,11 @@
 </div>
 
   <div class="row">
+  <strong>Timer:</strong> <span id="timer">00:00</span>
+</div>
+
+
+  <div class="row">
   <button id="finishBtn" type="button" disabled>✅ Finish & Show Feedback</button>
 </div>
 
@@ -60,15 +65,32 @@
 </div>
 
 
-  <div class="row">
-    <strong>Current Question</strong>
-    <div id="question" class="box"></div>
-  </div>
+ <div class="row">
+  <strong>Current Question</strong>
+  <div id="question" class="box"></div>
+  <button id="speakQBtn" type="button">🔊 Hear Question</button>
+</div>
+
 
   <div class="row">
     <strong>Transcript</strong>
     <div id="transcript" class="box"></div>
   </div>
+
+  <div class="row">
+  <button id="skipBtn" type="button" disabled>⏭️ Skip Question</button>
+</div>
+
+  <div class="row">
+  <button id="retryBtn" type="button" disabled>🔁 Retry Question</button>
+</div>
+
+  <div class="row">
+  <button id="submitBtn" type="button" disabled>✅ Submit Answer</button>
+</div>
+
+
+
 
   <div class="row muted" id="status">Idle.</div>
 
@@ -77,9 +99,19 @@
   const statusEl = document.getElementById('status');
   const questionEl = document.getElementById('question');
   const transcriptEl = document.getElementById('transcript');
-
+  const finalFeedbackEl = document.getElementById('finalFeedback');
   const examLangSel = document.getElementById('examLanguage');
   const difficultySel = document.getElementById('difficulty');
+  const speakQBtn = document.getElementById('speakQBtn');
+  const skipBtn = document.getElementById('skipBtn');
+  const retryBtn = document.getElementById('retryBtn');
+  const submitBtn = document.getElementById('submitBtn');
+  const timerEl = document.getElementById('timer');
+
+
+
+
+
 
   sessionId = null;
   questionNumber = null;
@@ -87,6 +119,21 @@
   function setStatus(msg) {
     statusEl.textContent = msg;
   }
+submitBtn.addEventListener('click', async () => {
+  const transcript = (transcriptEl.textContent || '').trim();
+
+  if (!transcript) {
+    setStatus('No transcript to submit.');
+    return;
+  }
+
+  submitBtn.disabled = true;
+  retryBtn.disabled = true;
+
+  await submitAnswerAndAdvance(transcript);
+});
+
+
 
  startMockBtn.addEventListener('click', async () => {
   sessionId = null;
@@ -115,6 +162,8 @@
 
       questionEl.textContent = (data.question || '').trim() || '(no question returned)';
       setStatus(`Mock exam started. Session ${sessionId}, Q${questionNumber}.`);
+
+      skipBtn.disabled = false; // ✅ enable skip once exam starts
 
     } catch (e) {
       setStatus('Failed to start mock exam: ' + e.message);
@@ -166,6 +215,7 @@
     };
 
     recorder.start(); // keep it stable
+    startTimer();
     startRecBtn.disabled = true;
     stopRecBtn.disabled = false;
     setStatus('Recording…');
@@ -222,27 +272,87 @@
 
   }
 
+
+let timerInterval = null;
+let timerStartMs = null;
+
+function formatTime(ms) {
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
+}
+
+function startTimer() {
+  stopTimer(); // safety
+  timerStartMs = Date.now();
+  timerEl.textContent = '00:00';
+  timerInterval = setInterval(() => {
+    timerEl.textContent = formatTime(Date.now() - timerStartMs);
+  }, 200);
+}
+
+function stopTimer() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = null;
+}
+
+
+
+skipBtn.addEventListener('click', async () => {
+  if (!sessionId || !questionNumber) {
+    setStatus('No active mock session.');
+    return;
+  }
+
+  setStatus('Skipping… loading a new question in this section.');
+
+  try {
+    const resp = await fetch('/api/exam/skip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, question_number: Number(questionNumber) })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || data.details || 'exam/skip failed');
+
+    questionEl.textContent = (data.question || '').trim() || '(no question returned)';
+    transcriptEl.textContent = '';
+    setStatus(`Skipped. New question loaded (Q${questionNumber}).`);
+  } catch (e) {
+    setStatus('Skip failed: ' + e.message);
+  }
+});
+
+
+
   startRecBtn.addEventListener('click', startRecording);
 
   stopRecBtn.addEventListener('click', async () => {
     stopRecBtn.disabled = true;
     const blob = await stopRecording();
+    stopTimer();
 
-    if (blob && blob.size > 0) {
-      player.src = URL.createObjectURL(blob);
-      await player.play().catch(()=>{});
-    }
+
+
 
     startRecBtn.disabled = false;
     const transcript = await transcribeBlob(blob);
-    await submitAnswerAndAdvance(transcript);
 
+// Just show transcript. Do NOT auto-submit.
+setStatus('Review your transcript. Click Submit when ready.');
+submitBtn.disabled = false;
+retryBtn.disabled = false;
+
+
+    retryBtn.disabled = false;
     stopRecBtn.disabled = false;
   });
 
     async function submitAnswerAndAdvance(transcript) {
   if (!sessionId || !questionNumber) {
     setStatus('No active mock session. Click Start Mock Exam first.');
+    timerEl.textContent = '00:00';
     return;
   }
   if (!transcript) {
@@ -290,6 +400,45 @@
 
 
 
+speakQBtn.addEventListener('click', async () => {
+  const text = (questionEl.textContent || '').trim();
+  if (!text) {
+    setStatus('No question to read yet.');
+    return;
+  }
+
+  setStatus('Generating question audio…');
+
+  try {
+    const resp = await fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        language: examLangSel.value  // "english" | "french" | "german"
+      })
+    });
+
+    // If your /api/tts returns audio bytes:
+    const blob = await resp.blob();
+    if (!resp.ok) throw new Error('TTS failed');
+
+    player.src = URL.createObjectURL(blob);
+    await player.play().catch(() => {});
+    setStatus('Playing question audio.');
+  } catch (e) {
+    setStatus('TTS error: ' + e.message);
+  }
+});
+
+retryBtn.addEventListener('click', () => {
+  transcriptEl.textContent = '';
+  submitBtn.disabled = true;
+  setStatus('Retry recording when ready.');
+});
+
+
+
     finishBtn.addEventListener('click', async () => {
   if (!sessionId) {
     setStatus('No session to finish.');
@@ -309,9 +458,80 @@
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || data.details || 'exam/finish failed');
 
-    // For now: just show the raw JSON pretty-printed (we’ll format nicely next)
-    finalFeedbackEl.textContent = JSON.stringify(data, null, 2);
-    setStatus('Final feedback ready.');
+//  Render only section summaries (hide backend JSON)
+const sections = Array.isArray(data.section_feedback)
+  ? data.section_feedback
+  : [];
+
+if (!sections.length) {
+  finalFeedbackEl.textContent = "No section feedback returned.";
+  setStatus("Final feedback returned, but section feedback was empty.");
+  return;
+}
+
+const sectionScores = (data.section_scores && typeof data.section_scores === "object")
+  ? data.section_scores
+  : {};
+
+const overallScore = (typeof data.overall_score === "number")
+  ? data.overall_score
+  : null;
+
+const overallStrengths = Array.isArray(data.overall_strengths) ? data.overall_strengths : [];
+const overallWeaknesses = Array.isArray(data.overall_weaknesses) ? data.overall_weaknesses : [];
+
+finalFeedbackEl.innerHTML = `
+  ${overallScore !== null ? `
+    <div style="margin-bottom:14px;">
+      <strong>Overall Score:</strong> ${overallScore}/10
+    </div>
+  ` : ""}
+
+  ${sections.map(s => {
+    const score = (s.section in sectionScores)
+      ? sectionScores[s.section]
+      : null;
+
+    return `
+      <div style="margin-bottom:14px;">
+        <div style="font-weight:700; margin-bottom:6px;">
+          ${s.section.toUpperCase()}${score !== null ? ` — ${score}/10` : ""}
+        </div>
+
+        <div style="margin-bottom:8px;">
+          ${s.summary_en || ""}
+        </div>
+
+        <div><strong>Strengths</strong></div>
+        <ul>
+          ${(s.strengths || []).map(x => `<li>${x}</li>`).join("")}
+        </ul>
+
+        <div><strong>Improvements</strong></div>
+        <ul>
+          ${(s.improvements || []).map(x => `<li>${x}</li>`).join("")}
+        </ul>
+      </div>
+    `;
+  }).join("")}
+
+  <div style="margin-top:18px; padding-top:12px; border-top:1px solid #ddd;">
+    <div style="font-weight:700; margin-bottom:6px;">OVERALL STRENGTHS</div>
+    ${overallStrengths.length ? `
+      <ul>${overallStrengths.map(x => `<li>${x}</li>`).join("")}</ul>
+    ` : `<div class="muted">No overall strengths returned.</div>`}
+
+    <div style="font-weight:700; margin:12px 0 6px;">OVERALL WEAKNESSES</div>
+    ${overallWeaknesses.length ? `
+      <ul>${overallWeaknesses.map(x => `<li>${x}</li>`).join("")}</ul>
+    ` : `<div class="muted">No overall weaknesses returned.</div>`}
+  </div>
+`;
+
+setStatus('Final feedback ready.');
+
+
+
   } catch (e) {
     finalFeedbackEl.textContent = 'Failed to generate feedback.';
     setStatus('Finish failed: ' + e.message);

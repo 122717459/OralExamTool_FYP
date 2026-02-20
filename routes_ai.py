@@ -8,7 +8,9 @@ from flask_login import login_required, current_user
 import openai
 import json
 from datetime import datetime
+from collections import defaultdict
 import re
+import random
 
 bp_ai = Blueprint("ai_bp", __name__, url_prefix="/api")
 
@@ -71,6 +73,14 @@ def evaluate_answer_with_bands(language: str, difficulty: str, question: str, tr
         f"- The corrected answer MUST be written in {target_lang_name}.\n"
         "- Use ONLY these band labels: Excellent, Good, OK, Needs Work.\n"
         "- If there are no serious errors, return major_mistakes_en as an empty list.\n"
+        "- NEVER use placeholders like [your city], [your country], [your hobbies].\n"
+        "- Do NOT invent personal facts the student did not say.\n"
+        "- If info is missing, keep the corrected answer general and faithful to what was said.\n"
+        "- The corrected answer MUST NOT add any new factual details.\n"
+        "- Only use facts explicitly stated in the student's transcript.\n"
+        "- You may add polite generic filler (e.g., 'Nice to meet you.') but no invented specifics.\n"
+        "- If the student's answer correctly answers the question but is short, do NOT treat it as a major problem. Mention it as optional improvement only.\n"
+
     )
 
     user_msg = (
@@ -84,6 +94,8 @@ def evaluate_answer_with_bands(language: str, difficulty: str, question: str, tr
         "tips_en: 1–2 short tips in English\n"
         "bands: object with keys fluency, grammar, vocabulary, pronunciation, overall\n"
         "major_mistakes_en: list of 1–3 serious mistakes, or empty list if none\n"
+        "Important: corrected_answer_target must not contain bracket placeholders and must not invent details.\n"
+
     )
 
     resp = openai_client.chat.completions.create(
@@ -131,37 +143,417 @@ def db_session():
 # generates a SQLAlchemy session, Calling above pulls one session you can use with a block.
 
 
-
+# Generated using ChatGPT
 EXAM_QUESTION_BANK = {
     "introduction": {
-        "english": [
-            "Can you introduce yourself?",
-            "Tell me a little about your hobbies."
-        ],
-        "french": [
-            "Peux-tu te présenter ?",
-            "Parle-moi de tes loisirs."
-        ],
-        "german": [
-            "Kannst du dich vorstellen?",
-            "Erzähl mir etwas über deine Hobbys."
-        ],
+        "english": {
+            "beginner": [
+                "Can you introduce yourself?",
+                "How old are you?",
+                "Where do you live?",
+                "What do you like doing at the weekend?",
+                "What is your favourite food?",
+                "Tell me one thing you like about your town or city."
+            ],
+            "moderate": [
+                "Can you introduce yourself?",
+                "Where are you from, and what do you like about where you live?",
+                "What do you usually do on a typical weekday?",
+                "What do you like to do in your free time, and why?",
+                "How would your friends describe you?",
+                "What is one thing you are proud of about yourself?"
+            ],
+            "expert": [
+                "Can you introduce yourself and give some background about your interests?",
+                "How has the place where you live influenced you?",
+                "What personal quality helps you most in study or work, and why?",
+                "Tell me about a recent experience that taught you something important.",
+                "How do you manage your time, and what would you improve?",
+                "What goal are you working towards at the moment, and why does it matter?"
+            ],
+        },
+        "french": {
+            "beginner": [
+                "Peux-tu te présenter ?",
+                "Quel âge as-tu ?",
+                "Où habites-tu ?",
+                "Qu'est-ce que tu aimes faire le week-end ?",
+                "Quel est ton plat préféré ?",
+                "Dis-moi une chose que tu aimes dans ta ville."
+            ],
+            "moderate": [
+                "Peux-tu te présenter ?",
+                "D'où viens-tu et qu'est-ce que tu aimes dans l'endroit où tu habites ?",
+                "Que fais-tu pendant une journée normale en semaine ?",
+                "Qu'est-ce que tu aimes faire pendant ton temps libre et pourquoi ?",
+                "Comment tes amis te décriraient-ils ?",
+                "De quoi es-tu fier(e) chez toi ?"
+            ],
+            "expert": [
+                "Peux-tu te présenter et donner un peu de contexte sur tes centres d'intérêt ?",
+                "En quoi l'endroit où tu vis t'a-t-il influencé(e) ?",
+                "Quelle qualité personnelle t'aide le plus dans tes études ou ton travail, et pourquoi ?",
+                "Raconte une expérience récente qui t'a appris quelque chose d'important.",
+                "Comment gères-tu ton temps et que voudrais-tu améliorer ?",
+                "Quel objectif poursuis-tu en ce moment et pourquoi est-ce important pour toi ?"
+            ],
+        },
+        "german": {
+            "beginner": [
+                "Kannst du dich vorstellen?",
+                "Wie alt bist du?",
+                "Wo wohnst du?",
+                "Was machst du gern am Wochenende?",
+                "Was ist dein Lieblingsessen?",
+                "Nenne eine Sache, die dir an deiner Stadt gefällt."
+            ],
+            "moderate": [
+                "Kannst du dich vorstellen?",
+                "Woher kommst du und was gefällt dir an deinem Wohnort?",
+                "Was machst du normalerweise an einem typischen Wochentag?",
+                "Was machst du gern in deiner Freizeit und warum?",
+                "Wie würden dich deine Freunde beschreiben?",
+                "Worauf bist du besonders stolz?"
+            ],
+            "expert": [
+                "Kannst du dich vorstellen und etwas über deine Interessen erzählen?",
+                "Wie hat dich der Ort, an dem du lebst, beeinflusst?",
+                "Welche persönliche Eigenschaft hilft dir am meisten beim Lernen oder Arbeiten, und warum?",
+                "Erzähl von einer Erfahrung, aus der du etwas Wichtiges gelernt hast.",
+                "Wie organisierst du deine Zeit und was würdest du verbessern?",
+                "Welches Ziel verfolgst du gerade und warum ist es dir wichtig?"
+            ],
+        },
     },
+
     "school": {
-        "english": [
-            "What subjects are you studying?",
-            "What do you like or dislike about school?"
-        ],
-        "french": [
-            "Quelles matières étudies-tu ?",
-            "Qu’est-ce que tu aimes ou n’aimes pas à l’école ?"
-        ],
-        "german": [
-            "Welche Fächer lernst du?",
-            "Was magst oder magst du nicht an der Schule?"
-        ],
+        "english": {
+            "beginner": [
+                "Do you go to school or college?",
+                "What subjects do you study?",
+                "What is your favourite subject?",
+                "What time do you start school?",
+                "Do you have homework? Tell me about it.",
+                "Do you like your teachers?"
+            ],
+            "moderate": [
+                "What subjects are you studying?",
+                "What do you like and dislike about school or college?",
+                "Tell me about a recent project or assignment you worked on.",
+                "Which subject do you find most interesting, and why?",
+                "How do you usually study for exams or tests?",
+                "What skills do you think you are improving at school or college?"
+            ],
+            "expert": [
+                "How would you evaluate your current course or programme overall?",
+                "Tell me about a project that challenged you and what you learned from it.",
+                "Which skill is most important in your field of study, and why?",
+                "How do you handle stress during busy academic periods?",
+                "What changes would you make to improve your school or college experience?",
+                "How do you think education prepares people for real life?"
+            ],
+        },
+        "french": {
+            "beginner": [
+                "Tu vas à l'école ou à l'université ?",
+                "Quelles matières étudies-tu ?",
+                "Quelle est ta matière préférée ?",
+                "À quelle heure commences-tu les cours ?",
+                "As-tu des devoirs ? Parle-m'en.",
+                "Aimes-tu tes professeurs ?"
+            ],
+            "moderate": [
+                "Quelles matières étudies-tu ?",
+                "Qu'est-ce que tu aimes et que n'aimes-tu pas à l'école ou à l'université ?",
+                "Parle-moi d'un projet ou d'un devoir récent que tu as fait.",
+                "Quelle matière trouves-tu la plus intéressante et pourquoi ?",
+                "Comment révises-tu normalement pour les examens ?",
+                "Quelles compétences penses-tu améliorer grâce à tes études ?"
+            ],
+            "expert": [
+                "Comment évaluerais-tu ton programme d'études dans l'ensemble ?",
+                "Parle-moi d'un projet difficile et de ce que tu en as appris.",
+                "Quelle compétence est la plus importante dans ton domaine et pourquoi ?",
+                "Comment gères-tu le stress pendant les périodes chargées ?",
+                "Qu'est-ce que tu changerais pour améliorer ton expérience scolaire ?",
+                "Selon toi, à quoi sert l'éducation dans la vie réelle ?"
+            ],
+        },
+        "german": {
+            "beginner": [
+                "Gehst du zur Schule oder zur Uni?",
+                "Welche Fächer lernst du?",
+                "Was ist dein Lieblingsfach?",
+                "Wann beginnt die Schule/Uni?",
+                "Hast du Hausaufgaben? Erzähl davon.",
+                "Magst du deine Lehrer?"
+            ],
+            "moderate": [
+                "Welche Fächer lernst du?",
+                "Was magst du und was magst du nicht an der Schule oder Universität?",
+                "Erzähl mir von einem Projekt oder einer Aufgabe, die du kürzlich gemacht hast.",
+                "Welches Fach findest du am interessantesten und warum?",
+                "Wie lernst du normalerweise für Prüfungen?",
+                "Welche Fähigkeiten verbesserst du deiner Meinung nach in der Schule/Uni?"
+            ],
+            "expert": [
+                "Wie würdest du dein aktuelles Studium insgesamt bewerten?",
+                "Erzähl von einem Projekt, das dich gefordert hat, und was du daraus gelernt hast.",
+                "Welche Fähigkeit ist in deinem Studienbereich am wichtigsten und warum?",
+                "Wie gehst du mit Stress in intensiven Phasen um?",
+                "Was würdest du ändern, um deine Schul-/Uni-Erfahrung zu verbessern?",
+                "Wie bereitet Bildung deiner Meinung nach auf das echte Leben vor?"
+            ],
+        },
+    },
+
+    "hobbies": {
+        "english": {
+            "beginner": [
+                "What do you do in your free time?",
+                "Do you like sports?",
+                "Do you like music?",
+                "Do you like watching films or TV?",
+                "Do you like reading?",
+                "Tell me about your favourite hobby."
+            ],
+            "moderate": [
+                "What do you like to do in your free time?",
+                "Tell me about a hobby you enjoy and why you like it.",
+                "How often do you do it, and who do you usually do it with?",
+                "Do you prefer indoor or outdoor activities? Why?",
+                "Tell me about a film or TV series you enjoyed recently.",
+                "What hobby would you like to try in the future, and why?"
+            ],
+            "expert": [
+                "How do your hobbies affect your mood or stress levels?",
+                "Tell me about a hobby that helped you develop a useful skill.",
+                "Do you think hobbies should be productive, or just enjoyable? Why?",
+                "How has your free time changed over the last few years?",
+                "Describe a memorable experience connected to one of your hobbies.",
+                "If you had more free time, what would you do differently and why?"
+            ],
+        },
+        "french": {
+            "beginner": [
+                "Qu'est-ce que tu fais pendant ton temps libre ?",
+                "Aimes-tu le sport ?",
+                "Aimes-tu la musique ?",
+                "Aimes-tu regarder des films ou des séries ?",
+                "Aimes-tu lire ?",
+                "Parle-moi de ton loisir préféré."
+            ],
+            "moderate": [
+                "Qu'est-ce que tu aimes faire pendant ton temps libre ?",
+                "Parle-moi d'un loisir que tu aimes et explique pourquoi.",
+                "À quelle fréquence fais-tu cette activité et avec qui ?",
+                "Tu préfères les activités à l'intérieur ou à l'extérieur ? Pourquoi ?",
+                "Parle-moi d'un film ou d'une série que tu as apprécié(e) récemment.",
+                "Quel loisir aimerais-tu essayer dans le futur et pourquoi ?"
+            ],
+            "expert": [
+                "Comment tes loisirs influencent-ils ton humeur ou ton stress ?",
+                "Parle-moi d'un loisir qui t'a aidé à développer une compétence utile.",
+                "Selon toi, un loisir doit-il être productif ou simplement agréable ? Pourquoi ?",
+                "Comment ton temps libre a-t-il changé ces dernières années ?",
+                "Décris une expérience mémorable liée à un de tes loisirs.",
+                "Si tu avais plus de temps libre, que ferais-tu différemment et pourquoi ?"
+            ],
+        },
+        "german": {
+            "beginner": [
+                "Was machst du in deiner Freizeit?",
+                "Magst du Sport?",
+                "Magst du Musik?",
+                "Schaust du gern Filme oder Serien?",
+                "Liest du gern?",
+                "Erzähl mir von deinem Lieblingshobby."
+            ],
+            "moderate": [
+                "Was machst du gern in deiner Freizeit?",
+                "Erzähl mir von einem Hobby, das dir gefällt, und warum.",
+                "Wie oft machst du das und mit wem?",
+                "Magst du lieber Aktivitäten drinnen oder draußen? Warum?",
+                "Erzähl mir von einem Film oder einer Serie, die dir kürzlich gefallen hat.",
+                "Welches Hobby würdest du gern in Zukunft ausprobieren und warum?"
+            ],
+            "expert": [
+                "Wie beeinflussen deine Hobbys deine Stimmung oder deinen Stress?",
+                "Erzähl von einem Hobby, durch das du eine nützliche Fähigkeit gelernt hast.",
+                "Sollten Hobbys deiner Meinung nach produktiv sein oder einfach Spaß machen? Warum?",
+                "Wie hat sich deine Freizeit in den letzten Jahren verändert?",
+                "Beschreibe ein besonderes Erlebnis, das mit einem Hobby verbunden ist.",
+                "Wenn du mehr Freizeit hättest, was würdest du anders machen und warum?"
+            ],
+        },
+    },
+
+    "family_friends": {
+        "english": {
+            "beginner": [
+                "Do you have a big family or a small family?",
+                "Do you have brothers or sisters?",
+                "Who do you live with?",
+                "Tell me about your best friend.",
+                "What do you do with your friends?",
+                "Do you like spending time with your family?"
+            ],
+            "moderate": [
+                "Can you tell me about your family?",
+                "Who are you closest to, and why?",
+                "What do you and your family or friends like to do together?",
+                "Tell me about a friend who is important to you.",
+                "What do you value most in a friend?",
+                "How do you keep in touch with friends or family members?"
+            ],
+            "expert": [
+                "How have your family or friends influenced your decisions?",
+                "What makes a friendship strong in your opinion?",
+                "Describe a time when someone supported you and how it helped.",
+                "Do you think social media improves or harms friendships? Why?",
+                "How do you deal with disagreements with friends or family?",
+                "What do you think is the most important value in relationships?"
+            ],
+        },
+        "french": {
+            "beginner": [
+                "Tu as une grande famille ou une petite famille ?",
+                "As-tu des frères ou des sœurs ?",
+                "Avec qui habites-tu ?",
+                "Parle-moi de ton/ta meilleur(e) ami(e).",
+                "Qu'est-ce que tu fais avec tes amis ?",
+                "Aimes-tu passer du temps avec ta famille ?"
+            ],
+            "moderate": [
+                "Peux-tu me parler de ta famille ?",
+                "Avec qui es-tu le plus proche et pourquoi ?",
+                "Qu'est-ce que toi et ta famille ou tes amis aimez faire ensemble ?",
+                "Parle-moi d'un ami important pour toi.",
+                "Qu'est-ce que tu apprécies le plus chez un ami ?",
+                "Comment gardes-tu le contact avec tes amis ou les membres de ta famille ?"
+            ],
+            "expert": [
+                "Comment ta famille ou tes amis ont-ils influencé tes choix ?",
+                "Selon toi, qu'est-ce qui rend une amitié solide ?",
+                "Décris un moment où quelqu'un t'a soutenu et comment cela t'a aidé(e).",
+                "Penses-tu que les réseaux sociaux améliorent ou abîment les amitiés ? Pourquoi ?",
+                "Comment gères-tu les désaccords avec tes proches ?",
+                "Quelle est, selon toi, la valeur la plus importante dans une relation ?"
+            ],
+        },
+        "german": {
+            "beginner": [
+                "Hast du eine große oder eine kleine Familie?",
+                "Hast du Brüder oder Schwestern?",
+                "Mit wem wohnst du?",
+                "Erzähl mir von deinem besten Freund/deiner besten Freundin.",
+                "Was machst du mit deinen Freunden?",
+                "Verbringst du gern Zeit mit deiner Familie?"
+            ],
+            "moderate": [
+                "Kannst du mir von deiner Familie erzählen?",
+                "Mit wem bist du am engsten verbunden und warum?",
+                "Was machst du gern mit deiner Familie oder deinen Freunden zusammen?",
+                "Erzähl mir von einem Freund, der dir wichtig ist.",
+                "Was ist dir bei einem Freund am wichtigsten?",
+                "Wie hältst du Kontakt zu Freunden oder Familienmitgliedern?"
+            ],
+            "expert": [
+                "Wie haben Familie oder Freunde deine Entscheidungen beeinflusst?",
+                "Was macht eine Freundschaft deiner Meinung nach stark?",
+                "Beschreibe eine Situation, in der dich jemand unterstützt hat, und warum das wichtig war.",
+                "Verbessern oder verschlechtern soziale Medien Freundschaften? Warum?",
+                "Wie gehst du mit Konflikten in der Familie oder im Freundeskreis um?",
+                "Welche Werte sind dir in Beziehungen am wichtigsten?"
+            ],
+        },
+    },
+
+    "future_plans": {
+        "english": {
+            "beginner": [
+                "What do you want to do in the future?",
+                "What job would you like to have?",
+                "Do you want to travel in the future?",
+                "Do you want to study more?",
+                "Where would you like to live in the future?",
+                "Tell me one goal you have."
+            ],
+            "moderate": [
+                "What would you like to do in the future?",
+                "What career interests you, and why?",
+                "What is one goal you want to achieve in the next few years?",
+                "Would you like to study more in the future? What and why?",
+                "Do you want to work in your country or abroad? Why?",
+                "What skills do you want to develop for your future?"
+            ],
+            "expert": [
+                "What does success mean to you personally?",
+                "How do you plan to reach your long-term goals?",
+                "What challenges might you face in your future career, and how will you handle them?",
+                "Would you rather have a stable job or take risks? Why?",
+                "How do you think technology will change your future work or life?",
+                "If you could change one thing about your future, what would it be and why?"
+            ],
+        },
+        "french": {
+            "beginner": [
+                "Qu'est-ce que tu veux faire dans le futur ?",
+                "Quel métier aimerais-tu faire ?",
+                "Veux-tu voyager dans le futur ?",
+                "Veux-tu continuer tes études ?",
+                "Où aimerais-tu vivre plus tard ?",
+                "Dis-moi un objectif que tu as."
+            ],
+            "moderate": [
+                "Qu'aimerais-tu faire dans le futur ?",
+                "Quel métier t'intéresse et pourquoi ?",
+                "Quel est un objectif que tu veux atteindre dans les prochaines années ?",
+                "Aimerais-tu continuer tes études ? Quoi et pourquoi ?",
+                "Veux-tu travailler dans ton pays ou à l'étranger ? Pourquoi ?",
+                "Quelles compétences veux-tu développer pour ton avenir ?"
+            ],
+            "expert": [
+                "Que signifie la réussite pour toi, personnellement ?",
+                "Comment comptes-tu atteindre tes objectifs à long terme ?",
+                "Quels défis pourrais-tu rencontrer dans ta future carrière et comment vas-tu les gérer ?",
+                "Préfères-tu un travail stable ou prendre des risques ? Pourquoi ?",
+                "Selon toi, comment la technologie va-t-elle changer ton futur travail ou ta vie ?",
+                "Si tu pouvais changer une chose dans ton avenir, laquelle serait-ce et pourquoi ?"
+            ],
+        },
+        "german": {
+            "beginner": [
+                "Was möchtest du in der Zukunft machen?",
+                "Welchen Beruf möchtest du haben?",
+                "Möchtest du in Zukunft reisen?",
+                "Möchtest du weiter studieren?",
+                "Wo möchtest du später wohnen?",
+                "Nenne ein Ziel, das du hast."
+            ],
+            "moderate": [
+                "Was möchtest du in der Zukunft machen?",
+                "Welcher Beruf interessiert dich und warum?",
+                "Welches Ziel möchtest du in den nächsten Jahren erreichen?",
+                "Möchtest du in Zukunft weiter studieren? Was und warum?",
+                "Möchtest du in deinem Land oder im Ausland arbeiten? Warum?",
+                "Welche Fähigkeiten möchtest du für deine Zukunft entwickeln?"
+            ],
+            "expert": [
+                "Was bedeutet Erfolg für dich persönlich?",
+                "Wie planst du, deine langfristigen Ziele zu erreichen?",
+                "Welche Herausforderungen erwartest du in deiner Karriere, und wie gehst du damit um?",
+                "Würdest du lieber einen sicheren Job haben oder Risiken eingehen? Warum?",
+                "Wie wird Technologie deiner Meinung nach deine Arbeit oder dein Leben verändern?",
+                "Wenn du eine Sache an deiner Zukunft ändern könntest, was wäre das und warum?"
+            ],
+        },
     },
 }
+
+
+
+
 
 
 
@@ -181,6 +573,7 @@ def start_exam():
       "difficulty": "beginner" | "moderate" | "expert"
     }
     """
+
     data = request.get_json(force=True) or {}
     topic = (data.get("topic") or "general English conversation").strip()
     difficulty = (data.get("difficulty") or "moderate").strip().lower()
@@ -233,8 +626,48 @@ def start_exam():
     except Exception as e:
         return jsonify({"error": "start_exam failed", "details": str(e)}), 500
 
+def generate_followup_question(language: str, difficulty: str, section: str, last_question: str, transcript: str) -> str:
+    # Map language code to display name
+    target_lang_name = "English"
+    if language == "french":
+        target_lang_name = "French"
+    elif language == "german":
+        target_lang_name = "German"
+
+    system_msg = (
+        "You are an oral exam examiner.\n"
+        f"The exam language is {target_lang_name}. You MUST output only ONE question in {target_lang_name}.\n"
+        "Rules:\n"
+        "- Ask ONE clear follow-up question based on what the student just said.\n"
+        "- Do not give feedback.\n"
+        "- Do not include multiple questions.\n"
+        "- Keep it answerable in 20–40 seconds.\n"
+    )
+
+    user_msg = (
+        f"Section: {section}\n"
+        f"Difficulty: {difficulty}\n"
+        f"Previous question: {last_question}\n"
+        f"Student answer (transcript): {transcript}\n\n"
+        "Write the next follow-up question."
+    )
+
+    resp = openai_client.chat.completions.create(
+        model=MODEL_ID,
+        messages=[
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg},
+        ],
+        temperature=0.4,
+        max_tokens=80,
+        timeout=30,
+    )
+
+    q = (resp.choices[0].message.content or "").strip()
+    return q.strip('"').strip()
 
 
+# This code is from ChatGPT
 @bp_ai.post("/exam/answer")
 @login_required
 def exam_answer():
@@ -286,10 +719,11 @@ def exam_answer():
         language = session.language
 
         sequence = [
-            ("introduction", 0),
-            ("introduction", 1),
-            ("school", 0),
-            ("school", 1),
+            ("introduction", 0), ("introduction", 1), ("introduction", 2),
+            ("school", 0), ("school", 1), ("school", 2),
+            ("hobbies", 0), ("hobbies", 1), ("hobbies", 2),
+            ("family_friends", 0), ("family_friends", 1), ("family_friends", 2),
+            ("future_plans", 0), ("future_plans", 1), ("future_plans", 2),
         ]
 
         next_index = int(question_number)  # if we just answered #1, next_index points to item 2
@@ -307,7 +741,26 @@ def exam_answer():
             }), 200
 
         next_section, q_idx = sequence[next_index]
-        next_question_text = EXAM_QUESTION_BANK[next_section][language][q_idx]
+
+        # Bank questions for first 2 in the section (q_idx 0 and 1)
+        if q_idx in (0, 1):
+            next_question_text = EXAM_QUESTION_BANK[next_section][language][session.difficulty][q_idx]
+
+        # AI-generated ONLY for the final question in the section (q_idx 2)
+        else:  # q_idx == 2
+            try:
+                next_question_text = generate_followup_question(
+                    language=language,
+                    difficulty=session.difficulty,
+                    section=next_section,
+                    last_question=turn.question_text,  # question they just answered
+                    transcript=transcript  # what they just said
+                )
+            except Exception as e:
+                print("FOLLOWUP GEN ERROR:", e)
+                # fallback to bank q_idx 2 if AI fails
+                next_question_text = EXAM_QUESTION_BANK[next_section][language][session.difficulty][2]
+
         next_q_number = int(question_number) + 1
 
         # 5) Create next turn (question only)
@@ -687,6 +1140,77 @@ def dictionary_ai():
         return jsonify({"error": "dictionary_ai failed", "details": str(e)}), 500
 
 
+# This code is from ChatGPT
+@bp_ai.post("/exam/skip")
+@login_required
+def exam_skip():
+    """
+    Replaces the current question with a different one from the same section.
+    JSON:
+    { "session_id": 123, "question_number": 4 }
+    """
+    data = request.get_json(force=True) or {}
+    session_id = data.get("session_id")
+    question_number = data.get("question_number")
+
+    if not session_id or not question_number:
+        return jsonify({"error": "session_id and question_number are required"}), 400
+
+    db = db_session()
+    try:
+        session = db.get(ExamSession, int(session_id))
+        if not session or session.user_id != current_user.id:
+            return jsonify({"error": "session not found"}), 404
+        if session.status != "in_progress" and session.status != "completed":
+            # allow during in_progress; if you only use in_progress, keep just that
+            pass
+
+        turn = db.query(ExamTurn).filter(
+            ExamTurn.session_id == session.id,
+            ExamTurn.question_number == int(question_number)
+        ).first()
+        if not turn:
+            return jsonify({"error": "turn not found"}), 404
+
+        section = turn.section
+        language = session.language
+
+        # Get the question bank for this section/language
+        section_bank = (EXAM_QUESTION_BANK.get(section, {})
+                        .get(language, {})
+                        .get(session.difficulty, []))
+
+        if not section_bank:
+            return jsonify({"error": f"no question bank for section={section}, language={language}"}), 400
+
+        # Avoid repeating already-used questions in the section if possible
+        used = set(
+            q[0] for q in db.query(ExamTurn.question_text).filter(
+                ExamTurn.session_id == session.id,
+                ExamTurn.section == section
+            ).all()
+        )
+        candidates = [q for q in section_bank if q not in used]
+        if not candidates:
+            # fallback: allow any other question except the current one
+            candidates = [q for q in section_bank if q != turn.question_text] or section_bank
+
+        new_q = random.choice(candidates)
+        turn.question_text = new_q
+        db.add(turn)
+        db.commit()
+
+        return jsonify({
+            "session_id": session.id,
+            "question_number": turn.question_number,
+            "section": section,
+            "question": new_q
+        }), 200
+
+    finally:
+        db.close()
+
+#This code is from ChatGPT
 @bp_ai.post("/exam/start")
 @login_required
 def exam_start():
@@ -700,7 +1224,8 @@ def exam_start():
 
     # For now, always start with introduction section
     section = "introduction"
-    question_text = EXAM_QUESTION_BANK[section][language][0]
+    bank = EXAM_QUESTION_BANK[section][language][difficulty]
+    question_text = bank[0]
 
     db = db_session()
     try:
@@ -735,16 +1260,137 @@ def exam_start():
         db.close()
 
 
+
+def summarize_sections_with_ai(language: str, difficulty: str, turns):
+    by_section = defaultdict(list)
+    for t in turns:
+        if (t.transcript or "").strip():
+            by_section[t.section].append(t)
+
+    payload = []
+    for section, items in by_section.items():
+        payload.append({
+            "section": section,
+            "answers": [
+                {
+                    "question": it.question_text,
+                    "transcript": it.transcript,
+                    "overall_band": it.overall_band
+                } for it in items
+            ]
+        })
+
+    system_msg = (
+        "You are an oral exam examiner. "
+        "Return JSON with key 'sections'. "
+        "Each section must include: section, summary_en, strengths (list), improvements (list). "
+        "Be specific and professional."
+    )
+
+    payload_json = json.dumps(payload, ensure_ascii=False)
+
+    user_msg = (
+        f"Language: {language}\n"
+        f"Difficulty: {difficulty}\n"
+        "Answers grouped by section (JSON):\n"
+        f"{payload_json}"
+    )
+
+    resp = openai_client.chat.completions.create(
+        model=MODEL_ID,
+        messages=[
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg},
+        ],
+        temperature=0.3,
+        max_tokens=500,
+        response_format={"type": "json_object"},
+    )
+
+    raw = (resp.choices[0].message.content or "").strip()
+
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        print("SECTION SUMMARY RAW (bad JSON):", raw)
+        return []
+
+    return parsed.get("sections", [])
+
+
+def generate_exam_report(language: str, difficulty: str, turns) -> dict:
+    payload = []
+    for t in turns:
+        tx = (t.transcript or "").strip()
+        if not tx:
+            continue
+        payload.append({
+            "section": t.section,
+            "question": t.question_text,
+            "transcript": tx
+        })
+
+    system_msg = (
+        "You are an oral exam examiner. Return JSON only.\n"
+        "Grade by section and overall.\n"
+        "Be fair: short but correct answers should not be heavily penalized.\n"
+        "Do NOT invent facts.\n"
+        "\n"
+        "Return JSON with keys:\n"
+        "- section_scores: object mapping section -> integer 0..10\n"
+        "- section_feedback: list of objects with keys: section, summary_en, strengths (list), improvements (list)\n"
+        "- overall_strengths: list (max 3)\n"
+        "- overall_weaknesses: list (max 3)\n"
+        "- overall_score: integer 0..10\n"
+    )
+
+    user_msg = (
+        f"Exam language: {language}\n"
+        f"Difficulty: {difficulty}\n"
+        "Student answers as JSON:\n"
+        f"{json.dumps(payload, ensure_ascii=False)}\n"
+    )
+
+    resp = openai_client.chat.completions.create(
+        model=MODEL_ID,
+        messages=[
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg},
+        ],
+        temperature=0.2,
+        max_tokens=800,
+        response_format={"type": "json_object"},
+        timeout=30,
+    )
+
+    raw = (resp.choices[0].message.content or "").strip()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        print("EXAM REPORT RAW (bad JSON):", raw)
+        return {
+            "section_scores": {},
+            "section_feedback": [],
+            "overall_strengths": [],
+            "overall_weaknesses": ["Could not generate final report."],
+            "overall_score": 0
+        }
+
+
+#This code is from ChatGPT
 @bp_ai.post("/exam/finish")
 @login_required
 def exam_finish():
     """
-    Marks an exam as completed and returns all turns.
+    Marks an exam as completed and returns an end-of-exam report (ONE AI call).
     JSON:
     { "session_id": 123 }
     """
+    print("FINISH: endpoint hit")
+
     data = request.get_json(force=True) or {}
     session_id = data.get("session_id")
+    print("FINISH: session_id =", session_id)
 
     if not session_id:
         return jsonify({"error": "session_id is required"}), 400
@@ -765,75 +1411,28 @@ def exam_finish():
             ExamTurn.session_id == session.id
         ).order_by(ExamTurn.question_number.asc()).all()
 
-        # Generate evaluations now (mock exam: feedback only at the end)
-        for t in turns[:1]:
+        print("FINISH: turns loaded =", len(turns))
 
-            if not (t.transcript or "").strip():
-                continue
+        # ✅ ONE-CALL EXAM REPORT
+        report = generate_exam_report(session.language, session.difficulty, turns)
 
-            evaluation = evaluate_answer_with_bands(
-                language=session.language,
-                difficulty=session.difficulty,
-                question=t.question_text,
-                transcript=t.transcript
-            )
+        print("FINISH: about to return response")
 
-            t.feedback_en = evaluation["feedback_en"]
-            t.corrected_answer_target = evaluation["corrected_answer_target"]
-            t.tips_en = evaluation["tips_en"]
-
-            t.fluency_band = evaluation["fluency_band"]
-            t.grammar_band = evaluation["grammar_band"]
-            t.vocabulary_band = evaluation["vocabulary_band"]
-            t.pronunciation_band = evaluation["pronunciation_band"]
-            t.overall_band = evaluation["overall_band"]
-
-            # Append major mistakes if present and needs work
-            needs_work = (
-                    evaluation["overall_band"] == "Needs Work" or
-                    evaluation["fluency_band"] == "Needs Work" or
-                    evaluation["grammar_band"] == "Needs Work" or
-                    evaluation["vocabulary_band"] == "Needs Work" or
-                    evaluation["pronunciation_band"] == "Needs Work"
-            )
-            if needs_work and evaluation.get("major_mistakes_en"):
-                t.feedback_en = (
-                        (t.feedback_en or "")
-                        + "\n\nMajor mistakes:\n"
-                        + evaluation["major_mistakes_en"]
-                ).strip()
-
-        db.commit()
-
+        # Return only what the student needs (no backend dump)
         return jsonify({
-            "session_id": session.id,
             "status": session.status,
             "language": session.language,
             "difficulty": session.difficulty,
-            "started_at": session.started_at.isoformat() if session.started_at else None,
-            "completed_at": session.completed_at.isoformat() if session.completed_at else None,
-            "turns": [
-    {
-        "question_number": t.question_number,
-        "section": t.section,
-        "question_text": t.question_text,
-        "transcript": t.transcript,
 
-        "feedback_en": t.feedback_en,
-        "corrected_answer_target": t.corrected_answer_target,
-        "tips_en": t.tips_en,
+            "overall_score": report.get("overall_score"),
+            "overall_strengths": report.get("overall_strengths", []),
+            "overall_weaknesses": report.get("overall_weaknesses", []),
 
-        "bands": {
-            "fluency": t.fluency_band,
-            "grammar": t.grammar_band,
-            "vocabulary": t.vocabulary_band,
-            "pronunciation": t.pronunciation_band,
-            "overall": t.overall_band,
-        }
-    } for t in turns
-]
-
+            "section_scores": report.get("section_scores", {}),
+            "section_feedback": report.get("section_feedback", []),
         }), 200
 
     finally:
         db.close()
+
+

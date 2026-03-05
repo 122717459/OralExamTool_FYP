@@ -109,7 +109,7 @@ def create_app() -> Flask:
         return jsonify({"status": "cleared"}), 200
 
 
-    # Calls the developer dashboard requires user to be logged in as developer4
+    # Calls the developer dashboard requires user to be logged in as developer
     @app.get("/developer")
     @login_required
     def developer_dashboard():

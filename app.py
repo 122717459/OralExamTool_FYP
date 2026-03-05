@@ -8,7 +8,7 @@ from flask_login import login_required
 from mock_exam import mock_exam_bp
 from flask_login import current_user
 from sqlalchemy import func
-
+from config import settings
 # DB setup
 from db import engine, Base, SessionLocal
 
@@ -30,7 +30,7 @@ from routes_user import bp_user
 def create_app() -> Flask:
     app = Flask(__name__)
 
-    app.config["SECRET_KEY"] = "dev-change-this"
+    app.config["SECRET_KEY"] = settings.SECRET_KEY
 
     # Create any missing tables
     Base.metadata.create_all(bind=engine)
@@ -249,10 +249,7 @@ def create_app() -> Flask:
 
     return app
 
-    app = create_app()
 
-    if __name__ == "__main__":
-        app.run(debug=True)
 
 """ ChatGPT Prompt 
 Write two Flask route functions called audit_view and audit_clear.

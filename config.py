@@ -13,7 +13,10 @@ class Settings:
     """
 
     # ---------------- Database ----------------
-    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///oralexamtool.db")
+    raw_db = os.getenv("DATABASE_URL", "sqlite:///oralexamtool.db")
+    if raw_db.startswith("postgres://"):
+        raw_db = raw_db.replace("postgres://", "postgresql://", 1)
+    DATABASE_URL = raw_db
 
     # ---------------- OpenAI (standard) ----------------
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -24,6 +27,9 @@ class Settings:
     AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
     AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT")
 
+    SECRET_KEY = os.getenv("SECRET_KEY", "dev-change-this")
+    FLASK_ENV = os.getenv("FLASK_ENV", "development")
+    PORT = int(os.getenv("PORT", "5000"))
 
 # Create a global instance we can import anywhere in the app
 settings = Settings()

@@ -12,10 +12,9 @@ from config import settings
 
 # Creates the database engine
 
-# The engine is the "core" connection to your database.
-# It knows where your database lives (from DATABASE_URL in .env)
+# The engine is the "core" connection to the database.
+# It knows where the database lives (from DATABASE_URL in .env)
 # and handles the low-level connection details.
-#
 # echo=False means: don’t print SQL statements in the console.
 # future=True just tells SQLAlchemy to use the modern 2.x-style API.
 engine = create_engine(settings.DATABASE_URL, echo=False, future=True)
@@ -23,10 +22,8 @@ engine = create_engine(settings.DATABASE_URL, echo=False, future=True)
 
 
 # Create a Session factory
-
 # This is how you’ll actually interact with the database in code.
 # Each time you need to read/write data, you create a new Session from this.
-#
 # - bind=engine → connects it to the engine we made above
 # - autoflush=False → avoids automatically sending changes until you commit
 # - autocommit=False → you control when to commit (good for transactions)
@@ -36,7 +33,6 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, futu
 
 
 # Create a Base class for models
-
 # Every model (table) class in your app should inherit from this Base.
 # It helps SQLAlchemy know which classes map to database tables.
 Base = declarative_base()
@@ -44,7 +40,6 @@ Base = declarative_base()
 
 
 # Dependency generator for database sessions
-
 # This is a little helper function that “yields” a database session.
 # It’s commonly used with FastAPI or Flask so you can get a fresh session
 # in each request and make sure it closes automatically afterwards.

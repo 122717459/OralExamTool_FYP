@@ -8,7 +8,7 @@ from admin_utils import admin_required
 
 bp_admin = Blueprint("admin", __name__, url_prefix="/admin")
 
-
+# Returns a list of all registered users in the system
 @bp_admin.get("/users")
 @admin_required
 def admin_list_users():
@@ -30,7 +30,7 @@ def admin_list_users():
     finally:
         db.close()
 
-
+# Allows the admin to delete a user account
 @bp_admin.delete("/users/<int:user_id>")
 @admin_required
 def admin_delete_user(user_id: int):
@@ -44,7 +44,7 @@ def admin_delete_user(user_id: int):
         if not u:
             return jsonify({"error": "not found"}), 404
 
-        # Safety: prevent deleting an admin account (optional but recommended)
+        #  prevent deleting an admin account
         if u.is_admin:
             return jsonify({"error": "cannot delete an admin user"}), 400
 
@@ -55,6 +55,7 @@ def admin_delete_user(user_id: int):
         db.close()
 
 
+# Allows admins to view analysis logs in the system
 @bp_admin.get("/logs")
 @admin_required
 def admin_list_all_logs():

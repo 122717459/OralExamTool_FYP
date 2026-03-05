@@ -1,4 +1,4 @@
-# (OpenAI;  Whisper STT forced language; unique endpoints)
+# routes_speech.py
 from flask import Blueprint, request, jsonify, Response, send_file
 from config import settings
 from openai import OpenAI
@@ -8,7 +8,8 @@ import io, tempfile, os
 bp_speech = Blueprint("speech_bp", __name__, url_prefix="/api")
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
-# This code is from ChatGPT this file deals with how the programme will deal with the users speech.
+
+# This code is from ChatGPT this file deals with how the programme will deal with users speech.
 @bp_speech.post("/stt", endpoint="stt_v1")
 def stt(): # This function explains the expected datafile and the language.
     """
@@ -28,7 +29,7 @@ def stt(): # This function explains the expected datafile and the language.
     if not data or len(data) < 2000: # rejects empty audio files ( less than 2 kb)
         return jsonify({"error": "empty or too-small audio upload", "bytes": len(data or b'')}), 400
 
-    buf = io.BytesIO(data) # Wraps the raw bytes in a bytesio object ( a file like stream)
+    buf = io.BytesIO(data) # Wraps the raw bytes in a bytesio object
     buf.name = f.filename or "audio.webm"  # Gives it a name so that the API knows what it is.
     buf.seek(0) # resets the read pointer to the start.
 
@@ -108,7 +109,7 @@ def tts(): # Registers a post endpoint /tts inside the bp_speech blueprint, This
     text = (data.get("text") or "").strip() #Extracts text: the text to speak
     language = (data.get("language") or "").strip().lower()
 
-    # Default voices per language (tweak as you like)
+    # Default voices per language
     voice_by_language = {
         "english": "alloy",
         "french": "nova",
@@ -150,5 +151,82 @@ def tts(): # Registers a post endpoint /tts inside the bp_speech blueprint, This
         )
     except Exception as e:
         return jsonify({"error": "TTS failed", "details": str(e)}), 500 # Any error returns HTTP 500
+
+
+
+
+
+
+""" This is the Prompt for def stt
+Write a Python Flask backend function called **stt()** for a language speaking mock exam application.
+The function should create a **POST API endpoint `/api/stt`** that performs **speech-to-text transcription**.
+The endpoint will receive a multipart form request containing:
+file – an uploaded audio recording from the user's microphone (webm, ogg, wav, mp3, or m4a)
+lang – the language code for the audio (for example: `en`, `fr`, `de`)
+The function should:
+1. Check that an audio file was uploaded.
+2. Read the uploaded audio file into memory.
+3. Send the audio file to an AI speech-to-text model (such as OpenAI Whisper).
+4. Ask the model to transcribe the audio into text.
+5. Return the transcript as JSON so the frontend can display it.
+Example response:
+```json
+{
+  "transcript": "I usually play football with my friends after school.",
+  "lang_used": "en"
+}
+```
+The function should also:
+reject empty or extremely small audio files
+return a clear error message if transcription fails
+handle exceptions so the API does not crash.
+"""
+
+
+
+""" THis is the promp for def answer_plain
+Write a Python Flask backend function called **answer_plain()** for a language speaking mock exam application.
+The function should create a POST API endpoint `/api/answer` that sends a user's question to an AI model and returns a text response.
+The endpoint will receive JSON data from the frontend containing:
+q – the user's question or message
+system (optional) – a system instruction that tells the AI how it should behave
+The function should:
+1. Read the JSON data from the request.
+2. Check that a question (**q**) was provided.
+3. Send the system instruction and the user's question to an AI chat model (for example `gpt-4o-mini`).
+4. Ask the AI to generate a short response.
+5. Return the AI's answer as JSON so the frontend can display it.
+Example response:
+```json id="9v1g0y"
+{
+  "text": "That's a great question. Can you tell me more about your hobbies?"
+}
+```
+The function should also include basic error handling if the AI request fails.
+"""
+
+
+
+""" This is the prompt for def tts
+Write a Python Flask backend function called tts() for a language learning application.
+The function should create a **POST API endpoint `/api/tts`** that converts text into spoken audio using an AI text-to-speech model.
+The endpoint will receive JSON data from the frontend containing:
+text – the text that should be spoken
+language – the language of the text (english / french / german)
+voice (optional) – the voice that should be used for the audio
+The function should:
+1. Read the JSON request data.
+2. Check that the text field is provided.
+3. Choose a default voice based on the language if no voice is provided.
+4. Send the text to an AI text-to-speech model (for example an OpenAI TTS model).
+5. Generate speech audio from the text.
+6. Return the audio file so the browser can play it.
+The response should return **audio data** (for example an MP3 file) with the correct audio MIME type so it can be played directly in the browser.
+The function should also:
+temporarily store the generated audio file if needed
+return an error message if speech generation fails
+include basic error handling so the API does not crash.
+"""
+
 
 

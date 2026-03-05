@@ -14,14 +14,63 @@ import random
 
 bp_ai = Blueprint("ai_bp", __name__, url_prefix="/api")
 
-#  Configure the OpenAI client (OpenAI)  I am going with OpenAI will adjust this code later to remove the azure.
+# Makes it less likely to get asked the same question when you skip
+TOPIC_ANGLES = {
+    "introducing yourself": [
+        "personal background",
+        "family",
+        "hobbies",
+        "daily routine",
+        "future goals",
+        "personality traits",
+        "strengths and weaknesses"
+    ],
+    "school life": [
+        "daily routine",
+        "teachers",
+        "friends",
+        "school rules",
+        "exams",
+        "favourite subjects",
+        "advantages and disadvantages",
+        "memorable experiences"
+    ],
+    "hobbies and free time": [
+        "favourite hobby",
+        "how you started",
+        "benefits of the hobby",
+        "time management",
+        "hobbies with friends",
+        "learning new skills",
+        "future hobby plans"
+    ],
+    "family and friends": [
+        "family relationships",
+        "important qualities",
+        "conflicts",
+        "shared activities",
+        "support systems",
+        "friendship values",
+        "differences between family and friends"
+    ],
+    "future plans": [
+        "career goals",
+        "education plans",
+        "motivations",
+        "challenges",
+        "backup plans",
+        "personal ambitions",
+        "where you see yourself in 10 years"
+    ]
+}
+#  Configure the OpenAI client (OpenAI)  I am going with OpenAI
 # This code is from ChatGPT
 if settings.AZURE_OPENAI_ENDPOINT and settings.AZURE_OPENAI_API_KEY:
     # Azure OpenAI
     openai_client = openai.AzureOpenAI(
         api_key=settings.AZURE_OPENAI_API_KEY,
         azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
-        api_version="2024-05-01-preview",  # use your Azure resource's API version
+        api_version="2024-05-01-preview",
     )
     MODEL_ID = settings.AZURE_OPENAI_DEPLOYMENT  # your deployment name
 else:
@@ -30,9 +79,11 @@ else:
     MODEL_ID = "gpt-4o-mini"  # small/fast model
 
 
-
+# Defining the scoring criteria used to evaluate the students answer. Provides more consistency
 BANDS = ["Excellent", "Good", "OK", "Needs Work"]
 
+# ChatGPT helped write this
+# Here we actually Evaluate the students answer using the band scoring system and generate feedback
 def evaluate_answer_with_bands(language: str, difficulty: str, question: str, transcript: str) -> dict:
     """
     Returns a dict with:
@@ -137,7 +188,7 @@ def evaluate_answer_with_bands(language: str, difficulty: str, question: str, tr
 
 
 
-
+# Opens a database session when querying the database
 def db_session():
     return next(get_db())
 # generates a SQLAlchemy session, Calling above pulls one session you can use with a block.
@@ -561,7 +612,8 @@ EXAM_QUESTION_BANK = {
 
 
 
-
+# Generates the first practise quesiton or a new one when skipping.
+# ChatGPT helped code this
 @bp_ai.post("/start_exam")
 def start_exam():
     """
@@ -578,6 +630,7 @@ def start_exam():
     topic = (data.get("topic") or "general English conversation").strip()
     difficulty = (data.get("difficulty") or "moderate").strip().lower()
     language = (data.get("language") or "english").strip().lower()
+    last_question = (data.get("last_question") or "").strip()
 
     # Map your difficulty labels to approximate CEFR-like descriptions.
     if difficulty == "beginner":
@@ -597,14 +650,26 @@ def start_exam():
     else:
         lang_name = "English"
 
+    # Choose angle
+    angles = TOPIC_ANGLES.get(topic.lower(), ["general discussion"])
+    angle = random.choice(angles)
+
+    # Avoid repeating same angle if last_question exists
+    if last_question:
+        # remove angle if it appears in last question
+        filtered = [a for a in angles if a.lower() not in last_question.lower()]
+        if filtered:
+            angle = random.choice(filtered)
+
     system_msg = (
         f"You are an oral-exam interlocutor for a {level_desc} learner. "
         f"The exam language is {lang_name}. "
         f"ALWAYS speak and write in {lang_name}. "
-        f"The practice topic is: {topic}. "
+        f"The main topic is: {topic}. "
+        f"The specific focus of this question must be: {angle}. "
         f"{difficulty_hint} "
         "Ask ONE clear, open-ended question that the student can answer in 20–40 seconds. "
-        "Do not include any explanations or meta text. Only output the question itself."
+        "Do not include explanations. Output only the question."
     )
 
     try:
@@ -614,7 +679,7 @@ def start_exam():
                 {"role": "system", "content": system_msg},
                 {"role": "user", "content": f"Start the exam with a question about: {topic}."},
             ],
-            temperature=0.4,
+            temperature=0.7,
             max_tokens=100,
         )
         question = (resp.choices[0].message.content or "").strip()
@@ -626,6 +691,7 @@ def start_exam():
     except Exception as e:
         return jsonify({"error": "start_exam failed", "details": str(e)}), 500
 
+# Generates follow up questions.
 def generate_followup_question(language: str, difficulty: str, section: str, last_question: str, transcript: str) -> str:
     # Map language code to display name
     target_lang_name = "English"
@@ -634,9 +700,31 @@ def generate_followup_question(language: str, difficulty: str, section: str, las
     elif language == "german":
         target_lang_name = "German"
 
+    if difficulty == "beginner":
+        difficulty_instruction = (
+            "The student is a beginner (A2). "
+            "Use very simple vocabulary and short sentences. "
+            "Ask a clear, concrete question about familiar topics. "
+            "Avoid abstract ideas or complex grammar."
+        )
+    elif difficulty == "expert":
+        difficulty_instruction = (
+            "The student is advanced (B2–C1). "
+            "Ask a more detailed or analytical follow-up question. "
+            "Encourage explanation, justification, or reflection. "
+            "You may explore opinions, consequences, or comparisons."
+        )
+    else:
+        difficulty_instruction = (
+            "The student is intermediate (B1). "
+            "Ask a natural follow-up question that encourages some detail. "
+            "Use everyday vocabulary but allow moderate complexity."
+        )
+
     system_msg = (
         "You are an oral exam examiner.\n"
         f"The exam language is {target_lang_name}. You MUST output only ONE question in {target_lang_name}.\n"
+        f"{difficulty_instruction}\n"
         "Rules:\n"
         "- Ask ONE clear follow-up question based on what the student just said.\n"
         "- Do not give feedback.\n"
@@ -718,13 +806,27 @@ def exam_answer():
         # For now: 2 intro questions, then 2 school questions, then finish.
         language = session.language
 
-        sequence = [
-            ("introduction", 0), ("introduction", 1), ("introduction", 2),
-            ("school", 0), ("school", 1), ("school", 2),
-            ("hobbies", 0), ("hobbies", 1), ("hobbies", 2),
-            ("family_friends", 0), ("family_friends", 1), ("family_friends", 2),
-            ("future_plans", 0), ("future_plans", 1), ("future_plans", 2),
-        ]
+        sections = ["introduction", "school", "hobbies", "family_friends", "future_plans"]
+
+        questions_per_section = session.total_questions // len(sections)
+
+        sequence = []
+
+        for section in sections:
+            if questions_per_section == 1:
+                # 5-question exam → bank only
+                sequence.append((section, 0))
+
+            elif questions_per_section == 2:
+                # 10-question exam → bank then AI
+                sequence.append((section, 0))
+                sequence.append((section, 2))  # AI follow-up
+
+            else:
+                # 15-question exam → bank, bank, AI
+                sequence.append((section, 0))
+                sequence.append((section, 1))
+                sequence.append((section, 2))
 
         next_index = int(question_number)  # if we just answered #1, next_index points to item 2
         if next_index >= len(sequence):
@@ -812,6 +914,7 @@ def exam_turn():
     topic = (data.get("topic") or "general English conversation").strip()
     difficulty = (data.get("difficulty") or "moderate").strip().lower()
     language = (data.get("language") or "english").strip().lower()
+    last_question = data.get("last_question")
 
     if not transcript:
         return jsonify({"error": "transcript is required"}), 400
@@ -984,10 +1087,9 @@ def get_feedback(): # Registers a post endpoint at /api/feedback. lays out expec
         f"Question (optional): {prompt}\n"
         f"Student answer: {transcript}\n\n"
         "Return:\n"
-        "1) Key mistakes (grammar/word choice/fluency)\n"
-        "2) Corrected answer (one good version)\n"
-        "3) One tip to improve"
-        "4) Score the student's answer from 1 to 10. Anchors: 10=excellent, 7–8=good, 5=okay, 3=weak, 1=very poor."
+        "1) Key mistake (grammar/word choice/fluency)\n"
+        "2) Corrected answer if the score is less than 9 or 10 (one good version)\n"
+        "3) Score the student's answer from 1 to 10. Anchors: 10=excellent, 7–8=good, 5=okay, 3=weak, 1=very poor. Be generous depending on difficulty"
     ) # Keeps the model focused, structured, and consice.
 
     try:
@@ -1027,6 +1129,7 @@ def get_feedback(): # Registers a post endpoint at /api/feedback. lays out expec
 
 
 
+# This code is from ChatGPT
 @bp_ai.post("/dictionary_ai")
 def dictionary_ai():
     """
@@ -1210,7 +1313,7 @@ def exam_skip():
     finally:
         db.close()
 
-#This code is from ChatGPT
+
 @bp_ai.post("/exam/start")
 @login_required
 def exam_start():
@@ -1221,11 +1324,14 @@ def exam_start():
 
     language = (data.get("language") or current_user.preferred_language or "english").lower()
     difficulty = (data.get("difficulty") or current_user.preferred_difficulty or "moderate").lower()
+    total_questions = int(data.get("total_questions") or 15)
+    if total_questions not in (5, 10, 15):
+        total_questions = 15
 
     # For now, always start with introduction section
     section = "introduction"
     bank = EXAM_QUESTION_BANK[section][language][difficulty]
-    question_text = bank[0]
+    question_text = random.choice(bank)
 
     db = db_session()
     try:
@@ -1234,6 +1340,7 @@ def exam_start():
             user_id=current_user.id,
             language=language,
             difficulty=difficulty,
+            total_questions=total_questions,
         )
         db.add(session)
         db.commit()
@@ -1377,7 +1484,6 @@ def generate_exam_report(language: str, difficulty: str, turns) -> dict:
         }
 
 
-#This code is from ChatGPT
 @bp_ai.post("/exam/finish")
 @login_required
 def exam_finish():
@@ -1434,5 +1540,291 @@ def exam_finish():
 
     finally:
         db.close()
+
+
+
+""" This is the prompt for setting up the OpenAI client
+Write Python code that sets up an OpenAI client for a Flask application.
+The application should be able to run in two different environments:
+1. Using **Azure OpenAI**
+2. Using the **standard OpenAI API**
+The configuration values are stored in a `settings` object.
+The settings include:
+
+ `AZURE_OPENAI_ENDPOINT`
+ `AZURE_OPENAI_API_KEY`
+ `AZURE_OPENAI_DEPLOYMENT`
+ `OPENAI_API_KEY`
+
+Logic the code should follow:
+ If the Azure endpoint and Azure API key are available, create an **Azure OpenAI client** using `openai.AzureOpenAI`.
+  Use the Azure endpoint and API key, set the API version to `"2024-05-01-preview"`, and set `MODEL_ID` to the Azure deployment name.
+
+If those Azure settings are not available, create a **standard OpenAI client** using `openai.OpenAI` and the regular OpenAI API key.
+ In that case set `MODEL_ID` to `"gpt-4o-mini"`.
+The code should end with two variables ready to use later in the program:
+ `openai_client`
+ `MODEL_ID`
+"""
+
+""" This is the prompt I used for helping with Def evaluate answer with bands
+Generate a Python constant called **BANDS** that defines a scoring rubric for an AI system evaluating spoken answers in a language speaking mock exam application.
+
+The rubric should include band descriptions for scores from 1–10 and should cover:
+ grammar accuracy
+ fluency and flow
+ pronunciation clarity
+ overall communicative ability
+
+Each band description should be short and written so it can be inserted directly into an AI prompt instructing the model how to evaluate the student's answer.
+Return the rubric as a Python dictionary.
+"""
+
+"""
+Create a Python data structure called QUESTION_BANK for a language oral exam practice application.
+Requirements: The question bank should be organised by:
+Language,English,French and German
+Difficulty level: beginner,moderate and expert
+Exam sections/topics: introducing yourself, school life,hobbies and free time,family and friends andfuture plans
+For every combination of language and difficulty level, include 6 questions per section.
+The questions should: be short oral exam style prompts. encourage students to speak in full sentences and match the difficulty level and be suitable for a school-style oral exam
+Return the result as a nested Python dictionary that could be hard-coded into a backend system."""
+
+
+
+
+""" ChatGPT Prompt for def start_exam
+Write a Python Flask backend function called start_exam() for a language speaking mock exam application.
+
+The function should:
+
+• Create an API endpoint `/api/start_exam` that accepts a POST request
+• Read JSON data sent from the frontend containing:
+
+* topic
+* difficulty (beginner / moderate / expert)
+* language (english / french / german)
+* last_question (optional, used to avoid repeating the same question)
+
+The function should then:
+
+1. Use a **question bank** or **AI model** to generate a new speaking question based on the topic, difficulty, and language.
+2. Try to avoid repeating the same question if `last_question` is provided.
+3. Return the question as JSON so the frontend can display it.
+
+Example response:
+
+```json
+{
+  "question": "What do you enjoy most about your school life?",
+  "model": "gpt-4o-mini"
+}
+```
+
+The function should also include basic error handling if something goes wrong when generating the question.
+"""
+
+
+""" This is the prompt for exam_answer
+Write a Python Flask backend function called exam_answer() for a language speaking mock exam application.
+
+The function should create a POST API endpoint `/api/exam/answer`.
+The endpoint will receive JSON data from the frontend containing:
+ session_id (the ID of the exam session)
+ question_number (which question the student is answering)
+ transcript (the student's spoken answer converted to text)
+The function should:
+1. Look up the exam session using the session_id.
+2. Save the student's transcript for that question.
+3. Store the answer in a database or session record so it can be used later for final feedback.
+4. Determine whether the exam is finished or if there are more questions.
+5. If there are more questions, generate or retrieve the next question.
+6. If the exam is finished, return a flag indicating that the exam is complete.
+The function should return JSON like this when the exam continues:
+
+```json id="g4v5ja"
+{
+  "question_number": 4,
+  "question": "What do you usually do with your friends at the weekend?"
+}
+```
+If the exam is finished it should return:
+```json id="f6m2ck"
+{
+  "done": true
+}
+```
+Include basic error handling if the session cannot be found or the request data is invalid.
+"""
+
+
+
+""" This is the Prompt for def exam_turn
+Write a Python Flask backend function called exam_turn() for a language speaking mock exam application.
+The function should create a POST API endpoint `/api/exam_turn`.
+The endpoint will receive JSON data from the frontend containing:
+ transcript (the text produced from the student's speech)
+ last_question (the question the student answered)
+ topic
+difficulty (beginner / moderate / expert)
+ language (english / french / german)
+
+The function should then:
+1. Send the transcript and the question to an AI model to evaluate the student's answer.
+2. The AI should return:
+    feedback explaining how the student did
+    a corrected version of the answer if needed
+    a short tip to help the student improve
+    a score out of 10
+3. The system should also generate the next question related to the same topic.
+The function should return a JSON response like:
+```json
+{
+  "feedback": "Good answer but watch your verb endings.",
+  "corrected_answer": "I usually play football with my friends after school.",
+  "tip": "Try to use longer sentences to explain your ideas.",
+  "score": 7,
+  "next_question": "What do you usually do after school?"
+}
+```
+Include basic error handling if the AI request fails.
+"""
+
+
+""" This is the prompt for def get_feedback
+Write a Python Flask backend function called get_feedback() for a language speaking mock exam application.
+The function should create a **POST API endpoint** that receives JSON data from the frontend.
+The request will contain:
+ transcript (the student's spoken answer converted to text)
+ question (the question the student answered)
+ difficulty level (beginner / moderate / expert)
+ language (english / french / german)
+
+The function should:
+
+1. Send the transcript and question to an AI model.
+2. Ask the AI to analyse the student's answer.
+3. The AI should return:
+
+   feedback explaining what the student did well or poorly
+   a corrected version of the answer (if needed)
+   a short learning tip
+   a score out of 10
+The function should return the result as JSON like this:
+
+```json
+{
+  "feedback": "Good vocabulary but your verb tense needs improvement.",
+  "corrected_answer": "Yesterday I went to the cinema with my friends.",
+  "tip": "Remember to use past tense when talking about yesterday.",
+  "score": 6
+}
+```
+Include basic error handling if the AI request fails.
+"""
+
+
+""" This is the prompt for def dictionary_ai
+Write a Python Flask backend function called dictionary_ai() for a language speaking mock exam application.
+The function should create a POST API endpoint `/api/dictionary_ai`.
+The endpoint will receive JSON data from the frontend containing:
+term – the word or short phrase the student wants explained
+difficulty – the learner level (beginner / moderate / expert)
+The function should:
+1. Send the word or phrase to an AI language model.
+2. Ask the AI to return:
+   a simple meaning of the word
+   the part of speech (noun, verb, adjective, etc.)
+   2–3 example sentences
+   a few synonyms if appropriate.
+3. Adjust the explanation so it matches the difficulty level (simpler explanations for beginners).
+4. Return the result as JSON so the frontend can display it.
+
+Example response format:
+
+```json
+{
+  "headword": "assignment",
+  "part_of_speech": "noun",
+  "meaning": "A piece of work that a student must complete for school.",
+  "examples": [
+    "I finished my English assignment last night.",
+    "The teacher gave us a new assignment today."
+  ],
+  "synonyms": ["task", "homework"]
+}
+```
+
+Include basic error handling if the AI request fails.
+"""
+
+
+""" This is the prompt for def exam_skip
+Write a Python Flask backend function called exam_skip() for a language speaking mock exam application.
+The function should create a POST API endpoint `/api/exam/skip`.
+The endpoint will receive JSON data from the frontend containing:
+
+session_id – the current exam session
+uestion_number – the question the student wants to skip
+The function should:
+1. Look up the exam session using the session_id.
+2. Confirm the session exists and the question number is valid.
+3. Generate or select a new question from the same section/topic so the exam structure stays consistent.
+4. Replace the skipped question with the new question.
+5. Return the new question so the frontend can display it.
+Example response format:
+```json id="cx6qz1"
+{
+  "question": "What subject do you enjoy the most at school and why?"
+}
+```
+Include basic error handling if the session cannot be found or if the request data is invalid.
+"""
+
+
+
+""" This is the prompt for the question bank
+Create a Python data structure called **QUESTION_BANK** for a language speaking mock exam application.
+The question bank should be a **nested Python dictionary** organised by:
+1. Language
+    english
+    french
+    german
+2. Difficulty level
+    beginner
+    moderate
+    expert
+
+3. Exam sections / topics
+    introducing yourself
+    school life
+    hobbies and free time
+    family and friends
+    future plans
+For every combination of language and difficulty, include 6 questions per section.
+The questions should:
+be short speaking prompts
+ encourage students to answer in full sentences
+ match the difficulty level
+ be appropriate for a school oral exam
+The result should be structured like this:
+```python
+QUESTION_BANK = {
+    "english": {
+        "beginner": {
+            "introducing yourself": [
+                "What is your name and where do you live?",
+                "How would you describe yourself?"
+            ],
+            "school life": [
+                "What is your favourite subject?",
+                "What do you usually do during lunch break?"
+            ]
+        }
+    }
+}
+```
+The structure should allow the program to easily select questions based on **language, difficulty, and topic**.
+"""
 
 

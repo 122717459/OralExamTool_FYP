@@ -10,9 +10,7 @@ from models import User
 bp_auth = Blueprint("auth", __name__, url_prefix="/auth")
 
 
-# -------------------------
 # LOGIN
-# -------------------------
 @bp_auth.get("/login")
 def login_get():
     """
@@ -54,9 +52,7 @@ def login_post():
         db.close()
 
 
-# -------------------------
 # SIGNUP
-# -------------------------
 @bp_auth.get("/signup")
 def signup_get():
     """
@@ -94,7 +90,9 @@ def signup_post():
             flash("An account with that email already exists.", "error")
             return redirect(url_for("auth.signup_get"))
 
-        user = User(email=email)
+        is_admin = request.form.get("is_admin") == "on"
+
+        user = User(email=email, is_admin=is_admin)
         user.set_password(password)
 
         db.add(user)
@@ -107,9 +105,8 @@ def signup_post():
         db.close()
 
 
-# -------------------------
+
 # LOGOUT
-# -------------------------
 @bp_auth.post("/logout")
 @login_required
 def logout_post():

@@ -10,7 +10,7 @@ bp_user = Blueprint("user", __name__, url_prefix="/api/user")
 ALLOWED_LANGUAGES = {"english", "french", "german"}
 ALLOWED_DIFFICULTIES = {"beginner", "moderate", "expert"}
 
-
+# Returns the preferences that the user has.
 @bp_user.get("/preferences")
 @login_required
 def get_preferences():
@@ -23,6 +23,7 @@ def get_preferences():
     }), 200
 
 
+# Updates the preferences if the user changes them.
 @bp_user.post("/preferences")
 @login_required
 def update_preferences():

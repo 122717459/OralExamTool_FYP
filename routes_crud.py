@@ -10,12 +10,12 @@ from models import AnalysisLog
 from audit import write_event
 from flask_login import login_required, current_user
 
-# We make a "Blueprint"  a container for related routes
-# This makes it easy to group CRUD endpoints under /api
+
+# Create a flask Blueprint
 bp_crud = Blueprint("crud", __name__, url_prefix="/api")
 
 
-# Get a database session. Our get_db() yields one; we just grab it.
+# Get a database session.
 def db_session():
     return next(get_db())
 
@@ -29,18 +29,18 @@ def to_dict(row: AnalysisLog):
         "input_text": row.input_text,
         "feedback_text": row.feedback_text,
         "model_name": row.model_name,
-        #  convert it to a readable string (ISO format)
+        #  convert it to a readable string
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
 
 
-#  READ (LIST)
+#  READ LIST
 @bp_crud.get("/logs")
 @login_required
 def list_logs():
     """
     GET /api/logs
-    Returns a page of logs. You can pass ?page=2&per_page=20.
+    Returns a page of logs. You can pass ?
     """
 
     # Read paging values safely. If someone sends junk, we fall back.
@@ -51,14 +51,17 @@ def list_logs():
     with db_session() as db:  # type: Session
 
         # Build a base SELECT query
-        stmt = select(AnalysisLog).where(AnalysisLog.user_id == current_user.id)
+        stmt = select(AnalysisLog)
+
+        if not current_user.is_admin:
+            stmt = stmt.where(AnalysisLog.user_id == current_user.id)
 
 
         # Count how many total rows exist for pagination
         total = db.scalar(select(func.count()).select_from(stmt.subquery()))
 
         # fetch one "page" of results
-        # Order newest first (highest id)
+        # Order newest first
         rows = db.execute(
             stmt.order_by(AnalysisLog.id.desc()).limit(per_page).offset((page - 1) * per_page)
         ).scalars().all()
@@ -72,11 +75,11 @@ def list_logs():
         }), 200
 
 
-#  READ (ONE)
+#  READ ONE
 @bp_crud.get("/logs/<int:log_id>")
 @login_required
 def get_log(log_id: int):
-    # Fetch one log by ID, like GET /api/logs/5
+    # Fetch one log by ID,
     with db_session() as db:  # type: Session
         row = db.get(AnalysisLog, log_id)
         if not row:
@@ -94,7 +97,7 @@ def get_log(log_id: int):
 @login_required
 def create_log():
     """
-    POST /api/logs creates a new log record.
+    POST logs creates a new log record.
     The client must send JSON like:
     {
       "input_text": "some input",
@@ -129,7 +132,7 @@ def create_log():
         db.add(row)
         db.commit()  # Save so, it gets an ID
 
-        # # Update score columns only if provided and valid
+        # Update score columns only if provided and valid
         changed = False
         mapping = {
             "score_overall": scores.get("overall"),
@@ -148,17 +151,17 @@ def create_log():
             db.add(row)
             db.commit()
 
-        # Reload the record with any DB-generated values (like timestamps)
+        # Reload the record with any DB-generated values
         db.refresh(row)
 
-        # Log this event somewhere (function is defined elsewhere)
+        # Log this event
         write_event("CREATE", {
             "id": row.id,
             "model": row.model_name,
             "input_chars": len(row.input_text or "")
         })
 
-        # Return the created row and a 201 status (Created)
+        # Return the created row and a 201 status
         return jsonify(to_dict(row)), 201
 
 
@@ -223,7 +226,7 @@ def delete_log(log_id: int):
         if not row:
             return jsonify({"error": "not found"}), 404
 
-        if row.user_id != current_user.id:
+        if not current_user.is_admin and row.user_id != current_user.id:
             return jsonify({"error": "not found"}), 404
 
         db.delete(row)

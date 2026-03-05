@@ -2,606 +2,156 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Oral Exam Tool – Iteration 4</title>
+  <title>Oral Exam Tool</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 680px; margin: 2rem auto; padding: 0 1rem; }
-    button, select, input { font-size: 1rem; padding: .6rem .9rem; margin-right: .5rem; }
-    .row { margin: 1rem 0; }
-    .box { border: 1px solid #ddd; border-radius: 8px; padding: .75rem; background:#fff; min-height: 2.2rem; }
-    .muted { color:#666; font-size:.95rem; }
-    .ok { color:#0a0; }
-    .err { color:#b00; }
-  </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body>
-  <h1>Oral Exam Tool – Iteration 4</h1>
-  <p class="muted">
-    Practice mode: Start Practice → Question (TTS) → Record → STT → Feedback + Next Question (manual).<br>
-    Mock exam mode: Start Mock Exam → Fixed questions → Record → STT → English feedback + target corrected answer → Read corrected answer (button).
-  </p>
+<nav class="navbar">
+  <div class="nav-left">
+    <span class="logo">Project FireBeak</span>
+  </div>
 
-  {% if current_user.is_authenticated %}
-    <p>Logged in as: <strong>{{ current_user.email }}</strong></p>
-    <form method="post" action="{{ url_for('auth.logout_post') }}">
-      <button type="submit">Logout</button>
-    </form>
-  {% else %}
-    <p>You are not logged in.</p>
-    <a href="{{ url_for('auth.login_get') }}">Login</a> |
-    <a href="{{ url_for('auth.signup_get') }}">Sign up</a>
+  <div class="nav-right">
+  <a href="/" class="nav-link active">Practice</a>
+  <a href="{{ url_for('mock_exam_page') }}" class="nav-link">Mock Exam</a>
+<!-- This is for the developer only and requires authentication -->
+  {% if current_user.is_authenticated and current_user.is_admin %}
+    <a href="{{ url_for('developer_dashboard') }}" class="nav-link">Developer</a>
   {% endif %}
 
-  <div class="row">
-    <label for="difficulty"><strong>Difficulty:</strong></label>
-    <select id="difficulty">
-      <option value="beginner">Beginner</option>
-      <option value="moderate" selected>Moderate</option>
-      <option value="expert">Expert</option>
-    </select>
+  {% if current_user.is_authenticated %}
+    <form method="post"
+          action="{{ url_for('auth.logout_post') }}"
+          style="display:inline;">
+      <button type="submit" class="nav-link" style="background:none;border:none;">
+        Logout
+      </button>
+    </form>
+  {% endif %}
+</div>
+</nav>
+<!-- This is the heading and explanation for the practice mode -->
+<div class="container">
+  <h1 class="page-title">Practice Mode</h1>
+  <p class="muted">Work on any topic with fast feedback.</p>
 
-    <label for="examLanguage"><strong>Language:</strong></label>
-    <select id="examLanguage">
-      <option value="english" selected>English</option>
-      <option value="french">French</option>
-      <option value="german">German</option>
-    </select>
 
-    <label for="topic"><strong>Topic:</strong></label>
-    <select id="topic">
-      <option value="introducing yourself">Introducing yourself</option>
-      <option value="school life" selected>School life</option>
-      <option value="hobbies and free time">Hobbies and free time</option>
-      <option value="family and friends">Family and friends</option>
-      <option value="future plans">Future plans</option>
-    </select>
+  <!-- PRACTICE SETUP -->
+  <div class="card" id="practiceSetupCard">
+    <h2>Practice Setup</h2>
+
+    <!-- This is the difficulty section (3 dropdowns in one row) -->
+    <div class="setup-row">
+      <div>
+        <label for="difficulty"><strong>Difficulty</strong></label>
+        <select id="difficulty">
+          <option value="beginner">Beginner</option>
+          <option value="moderate" selected>Moderate</option>
+          <option value="expert">Expert</option>
+        </select>
+      </div>
+<!-- This is where the user selects the Language -->
+      <div>
+        <label for="examLanguage"><strong>Language</strong></label>
+        <select id="examLanguage">
+          <option value="english" selected>English</option>
+          <option value="french">French</option>
+          <option value="german">German</option>
+        </select>
+      </div>
+<!-- This is where the user selects the Topic they will practice -->
+      <div>
+        <label for="topic"><strong>Topic</strong></label>
+        <select id="topic">
+          <option value="introducing yourself">Introducing yourself</option>
+          <option value="school life" selected>School life</option>
+          <option value="hobbies and free time">Hobbies and free time</option>
+          <option value="family and friends">Family and friends</option>
+          <option value="future plans">Future plans</option>
+        </select>
+      </div>
+    </div>
+<!-- Here are the different buttons that are used in practice mode -->
+    <div style="margin-top:14px; display:flex; flex-wrap:wrap; gap:10px;">
+      <button id="startExamBtn" class="btn-primary" type="button">Start Practice</button>
+    </div>
   </div>
 
-  <div class="row">
-    <button id="startExamBtn" type="button">📝 Start Practice (Get Question)</button>
-    <button id="startMockExamBtn" type="button">🎯 Start Mock Exam</button>
-    <button id="readCorrectedBtn" type="button" disabled>🔊 Read Corrected Answer</button>
+  <!-- QUESTION -->
+<div class="card" id="practiceQuestionCard">
+
+  <div class="q-header">
+    <div>
+      <h2 style="margin:0;">Current Question</h2>
+    </div>
+
+    <div class="q-controls">
+      <button id="practiceSpeakBtn">🔊 Hear Question</button>
+      <button id="skipBtn" disabled>⏭️ Skip</button>
+    </div>
   </div>
 
-  <div class="row">
-    <button id="startBtn" type="button">🎙️ Start Recording</button>
-    <button id="stopBtn" type="button" disabled>⏹️ Stop & Get Feedback</button>
+  <div id="question" class="box" style="margin-top:14px;"></div>
+
+</div>
+
+  <!-- YOUR ANSWER -->
+ <div class="card" id="practiceAnswerCard">
+  <h2>Your Answer</h2>
+
+  <div id="transcript" class="box"></div>
+
+  <div class="answer-controls">
+    <button id="startBtn" class="record-btn" title="Start Recording"></button>
+    <button id="stopBtn" class="stop-btn" title="Stop Recording" disabled></button>
+
+    <button id="retryBtn" disabled>Retry</button>
+    <button id="nextQuestionBtn" class="btn-primary" disabled>Next Question</button>
+  </div>
+</div>
+
+  <!-- FEEDBACK -->
+<div class="card" id="practiceFeedbackCard">
+  <h2>Feedback</h2>
+  <div id="feedback" class="box"></div>
+
+  <div style="margin-top:10px;">
+    <button id="readCorrectedBtn" disabled>
+      🔊 Hear Corrected Answer
+    </button>
   </div>
 
-  <div class="row muted" id="status">Idle.</div>
+  <audio id="player" controls style="width:100%; margin-top:12px;"></audio>
+</div>
 
-  <div class="row">
-    <strong>Current Question</strong>
-    <div id="question" class="box"></div>
-  </div>
-
-  <div class="row">
-    <strong>Your Answer – Transcript</strong>
-    <div id="transcript" class="box"></div>
-  </div>
-
-  <div class="row">
-    <strong>Feedback</strong>
-    <div id="feedback" class="box"></div>
-  </div>
-
-  <div class="row">
-    <button id="retryBtn" type="button" disabled>🔁 Retry This Question</button>
-    <button id="nextQuestionBtn" type="button" disabled>➡️ Next Question</button>
-  </div>
-
-  <div class="row">
-    <audio id="player" controls style="width:100%;"></audio>
-  </div>
-
-  <hr />
-  <div class="row">
-    <h2>Dictionary helper</h2>
-    <p class="muted">
+  <!-- DICTIONARY -->
+  <div class="card" id="dictionaryCard">
+    <h2>Dictionary</h2>
+    <p class="muted" style="margin-top:6px;">
       Type a word or short phrase you don’t understand. The tool will explain it simply and give examples.
     </p>
-    <input id="dictInput" type="text" placeholder="e.g. complicated, assignment, nervous before exam…" style="width:60%;" />
-    <button id="dictBtn" type="button">🔍 Explain</button>
+
+    <div class="row" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+      <input id="dictInput" type="text" placeholder="e.g. complicated, assignment…" style="flex:1; min-width:240px;" />
+      <button id="dictBtn" type="button">🔍 Explain</button>
+    </div>
+
+    <div class="row">
+      <strong>Dictionary Result</strong>
+      <div id="dictResult" class="box"></div>
+    </div>
   </div>
 
-  <div class="row">
-    <strong>Dictionary Result</strong>
-    <div id="dictResult" class="box"></div>
-  </div>
-
- <script>
-  const startExamBtn     = document.getElementById('startExamBtn');
-  const startMockExamBtn = document.getElementById('startMockExamBtn');
-  const readCorrectedBtn = document.getElementById('readCorrectedBtn');
-
-  const startBtn        = document.getElementById('startBtn');
-  const stopBtn         = document.getElementById('stopBtn');
-  const retryBtn        = document.getElementById('retryBtn');
-  const nextQuestionBtn = document.getElementById('nextQuestionBtn');
-
-  const statusEl     = document.getElementById('status');
-  const questionEl   = document.getElementById('question');
-  const transcriptEl = document.getElementById('transcript');
-  const feedbackEl   = document.getElementById('feedback');
-  const player       = document.getElementById('player');
-
-  const difficultySel = document.getElementById('difficulty');
-  const topicSel      = document.getElementById('topic');
-  const examLangSel   = document.getElementById('examLanguage');
-
-  const dictInput    = document.getElementById('dictInput');
-  const dictBtn      = document.getElementById('dictBtn');
-  const dictResultEl = document.getElementById('dictResult');
-
-  let mediaStream = null;
-  let recorder = null;
-  let chunks = [];
-
-  let currentQuestion = "";
-  let pendingNextQuestion = "";
-
-  let examMode = "practice"; // "practice" | "mock"
-  let mockSessionId = null;
-  let mockQuestionNumber = null;
-
-  let lastCorrectedAnswerTarget = "";
-
-  function pickMime() {
-    const candidates = [
-      'audio/webm;codecs=opus',
-      'audio/webm',
-      'audio/mp4',
-      'audio/ogg;codecs=opus'
-    ];
-    for (const c of candidates) {
-      if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c)) return c;
-    }
-    return '';
-  }
-
-  function setStatus(msg, cls = '') {
-    statusEl.className = 'muted ' + cls;
-    statusEl.textContent = msg;
-  }
-
-  function stopAudio() {
-    try {
-      player.pause();
-      player.currentTime = 0;
-      const src = player.src;
-      player.src = '';
-      player.src = src;
-    } catch (_) {}
-  }
-
- async function speakText(text) {
-  if (!text) return;
-  setStatus('Speaking…', 'ok');
-  stopAudio();
-
-  const voice =
-    examLangSel?.value === 'french' ? 'shimmer' :
-    examLangSel?.value === 'german' ? 'nova' :
-    'alloy';
-
-  try {
-    const ttsResp = await fetch('/api/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, voice })
-    });
-
-    if (!ttsResp.ok) {
-      const j = await ttsResp.json().catch(()=>({}));
-      throw new Error(j.details || j.error || 'TTS failed');
-    }
-
-    const audioBlob = await ttsResp.blob();
-    player.src = URL.createObjectURL(audioBlob);
-    await player.play().catch(()=>{});
-  } catch (e) {
-    setStatus('TTS failed: ' + e.message, 'err');
-  }
-}
-
-
-  async function loadUserPreferences() {
-    try {
-      const resp = await fetch('/api/user/preferences', { credentials: 'same-origin' });
-      if (!resp.ok) return;
-      const prefs = await resp.json();
-
-      if (prefs.preferred_difficulty && difficultySel) difficultySel.value = prefs.preferred_difficulty;
-      if (prefs.preferred_language && examLangSel) examLangSel.value = prefs.preferred_language;
-    } catch (e) {
-      console.warn('Could not load preferences:', e);
-    }
-  }
-
-  let prefsSaveTimer = null;
-  function scheduleSaveUserPreferences() {
-    if (prefsSaveTimer) clearTimeout(prefsSaveTimer);
-    prefsSaveTimer = setTimeout(async () => {
-      try {
-        const payload = {
-          preferred_language: examLangSel ? examLangSel.value : 'english',
-          preferred_difficulty: difficultySel ? difficultySel.value : 'moderate'
-        };
-        await fetch('/api/user/preferences', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'same-origin',
-          body: JSON.stringify(payload)
-        });
-      } catch (e) {
-        console.warn('Could not save preferences:', e);
-      }
-    }, 200);
-  }
-
-  async function startRecording() {
-    setStatus('Requesting microphone…');
-    stopAudio();
-
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setStatus('Microphone not available in this browser.', 'err');
-      return;
-    }
-
-    try {
-      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (e) {
-      setStatus('Microphone permission denied.', 'err');
-      return;
-    }
-
-    const mimeType = pickMime();
-    try {
-      recorder = new MediaRecorder(mediaStream, mimeType ? { mimeType } : undefined);
-    } catch (e) {
-      setStatus('MediaRecorder not supported for this mime.', 'err');
-      return;
-    }
-
-    console.log("Recorder mime:", recorder.mimeType);
-
-    chunks = [];
-    recorder.ondataavailable = (e) => {
-      console.log("dataavailable size:", e.data?.size);
-      if (e.data && e.data.size > 0) chunks.push(e.data);
-    };
-
-    recorder.start(250);
-    startBtn.disabled = true;
-    stopBtn.disabled  = false;
-    setStatus('Recording…', 'ok');
-  }
-
-  function stopRecording() {
-    return new Promise((resolve) => {
-      if (!recorder) { resolve(null); return; }
-
-      recorder.onstop = () => {
-        try { mediaStream.getTracks().forEach(t => t.stop()); } catch (_) {}
-        const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
-        resolve(blob);
-      };
-
-      try {
-        if (recorder.state === "recording" && recorder.requestData) recorder.requestData();
-        recorder.stop();
-      } catch (_) {
-        resolve(null);
-      }
-    });
-  }
-
-  async function startExamPractice() {
-    examMode = "practice";
-    mockSessionId = null;
-    mockQuestionNumber = null;
-    lastCorrectedAnswerTarget = "";
-    readCorrectedBtn.disabled = true;
-
-    setStatus('Starting practice…');
-    questionEl.textContent = '';
-    transcriptEl.textContent = '';
-    feedbackEl.textContent = '';
-    pendingNextQuestion = '';
-    retryBtn.disabled = true;
-    nextQuestionBtn.disabled = true;
-    const difficulty = difficultySel.value;
-    const topic = topicSel.value;
-    const language = examLangSel ? examLangSel.value : 'english';
-    lastCorrectedAnswerTarget = '';
-    readCorrectedBtn.disabled = true;
-
-
-    try {
-      const resp = await fetch('/api/start_exam', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic, difficulty, language })
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || data.details || 'start_exam failed');
-
-      currentQuestion = (data.question || '').trim();
-      questionEl.textContent = currentQuestion || '(no question returned)';
-      if (!currentQuestion) {
-        setStatus('No question returned from the server.', 'err');
-        return;
-      }
-
-      setStatus('Practice started. Listen to the question, then record your answer.', 'ok');
-      await speakText(currentQuestion);
-    } catch (e) {
-      setStatus('Could not start practice: ' + e.message, 'err');
-    }
-  }
-
-  async function startMockExam() {
-    examMode = "mock";
-    lastCorrectedAnswerTarget = "";
-    readCorrectedBtn.disabled = true;
-
-    setStatus('Starting mock exam…');
-    questionEl.textContent = '';
-    transcriptEl.textContent = '';
-    feedbackEl.textContent = '';
-    pendingNextQuestion = '';
-    retryBtn.disabled = true;
-    nextQuestionBtn.disabled = true;
-
-    const language = examLangSel ? examLangSel.value : 'english';
-    const difficulty = difficultySel ? difficultySel.value : 'moderate';
-
-    try {
-      const resp = await fetch('/api/exam/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ language, difficulty })
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || data.details || 'exam/start failed');
-
-      mockSessionId = data.session_id;
-      mockQuestionNumber = data.question_number;
-
-      currentQuestion = (data.question || '').trim();
-      questionEl.textContent = currentQuestion || '(no question returned)';
-
-      setStatus('Mock exam started. Listen to the question, then record your answer.', 'ok');
-      await speakText(currentQuestion);
-    } catch (e) {
-      setStatus('Could not start mock exam: ' + e.message, 'err');
-    }
-  }
-
-  async function processAudioBlob(blob) {
-  if (!blob || blob.size < 2000) {
-    setStatus(`No usable audio captured (size=${blob ? blob.size : 0}).`, 'err');
-    transcriptEl.textContent = '(no speech detected)';
-    return;
-  }
-
-  if (!currentQuestion) {
-    setStatus('No current question. Start practice/mock exam first.', 'err');
-    return;
-  }
-
-  // ---- STT ----
-  const filename = (blob.type || '').includes('mp4') ? 'speech.m4a' : 'speech.webm';
-  const form = new FormData();
-  form.append('file', blob, filename);
-
-  const sttLang =
-    examLangSel?.value === 'french' ? 'fr' :
-    examLangSel?.value === 'german' ? 'de' : 'en';
-  form.append('lang', sttLang);
-
-  setStatus('Transcribing…');
-  let transcript = '';
-
-  try {
-    const sttResp = await fetch('/api/stt', { method: 'POST', body: form });
-    const data = await sttResp.json();
-    if (!sttResp.ok) throw new Error(data.error || data.details || 'STT failed');
-    transcript = (data.transcript || '').trim();
-  } catch (e) {
-    setStatus('Transcription failed: ' + e.message, 'err');
-    return;
-  }
-
-  transcriptEl.textContent = transcript || '(empty transcript)';
-  if (!transcript) {
-    setStatus('Empty transcript.', 'err');
-    return;
-  }
-
-  // ---- PRACTICE FEEDBACK (immediate, every time) ----
-  if (examMode === "practice") {
-    setStatus('Getting feedback…', 'ok');
-    feedbackEl.textContent = '';
-    pendingNextQuestion = '';
-    retryBtn.disabled = true;
-    nextQuestionBtn.disabled = true;
-
-    const topic = topicSel.value;
-    const difficulty = difficultySel.value;
-    const language = examLangSel.value; // "english" | "french" | "german"
-
-    try {
-      const resp = await fetch('/api/exam_turn', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transcript,
-          last_question: currentQuestion,
-          topic,
-          difficulty,
-          language
-        })
-      });
-
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || data.details || 'exam_turn failed');
-
-      // Show feedback
-      const feedback = (data.feedback || '').trim();
-const corrected = (data.corrected_answer || '').trim();
-
-// 🔊 store corrected answer so it can be spoken
-lastCorrectedAnswerTarget = (corrected && corrected !== 'NO_CHANGES_NEEDED') ? corrected : '';
-readCorrectedBtn.disabled = !lastCorrectedAnswerTarget;
-
-
-const tip = (data.tip || '').trim();
-const score = data.score;
-
-
-
-
-      let out = '';
-      if (feedback) out += feedback;
-      if (corrected && corrected !== 'NO_CHANGES_NEEDED') {
-  out += `\n\nCorrected answer:\n${corrected}`;
-}
-      if (tip) out += `\n\nTip:\n${tip}`;
-      if (score !== null && score !== undefined) out += `\n\nScore: ${score}/10`;
-
-      feedbackEl.textContent = out || '(no feedback returned)';
-
-      pendingNextQuestion = (data.next_question || '').trim();
-      retryBtn.disabled = false;
-      nextQuestionBtn.disabled = !pendingNextQuestion;
-
-      setStatus('Feedback ready.', 'ok');
-    } catch (e) {
-      setStatus('Feedback failed: ' + e.message, 'err');
-      retryBtn.disabled = false; // allow retry even if feedback fails
-    }
-
-    return;
-  }
-
-  // ---- MOCK MODE (no feedback here) ----
-  setStatus('Done transcribing (mock mode).', 'ok');
-}
-
-
-  async function lookupDictionary() {
-    const term = (dictInput.value || '').trim();
-    if (!term) {
-      setStatus('Please type a word or phrase to explain.', 'err');
-      dictResultEl.textContent = '(no word entered)';
-      return;
-    }
-
-    setStatus(`Looking up "${term}"…`, 'ok');
-    dictResultEl.textContent = 'Looking up…';
-
-    const difficulty = difficultySel.value;
-
-    try {
-      const resp = await fetch('/api/dictionary_ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ term, difficulty })
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || data.details || 'dictionary_ai failed');
-
-      const headword = data.headword || term;
-      const pos      = data.part_of_speech || '';
-      const meaning  = data.meaning || '(no meaning returned)';
-      const examples = Array.isArray(data.examples) ? data.examples : [];
-      const synonyms = Array.isArray(data.synonyms) ? data.synonyms : [];
-
-      let html = `<p><strong>${headword}</strong>${pos ? ' (' + pos + ')' : ''}</p>`;
-      html += `<p>${meaning}</p>`;
-
-      if (examples.length) {
-        html += '<p><strong>Examples:</strong><ul>';
-        for (const ex of examples) html += `<li>${ex}</li>`;
-        html += '</ul></p>';
-      }
-
-      if (synonyms.length) {
-        html += `<p><strong>Synonyms:</strong> ${synonyms.join(', ')}</p>`;
-      }
-
-      dictResultEl.innerHTML = html;
-      setStatus('Dictionary result ready.', 'ok');
-    } catch (e) {
-      dictResultEl.textContent = 'Could not get a dictionary result.';
-      setStatus('Dictionary lookup failed: ' + e.message, 'err');
-    }
-  }
-
-  // Wire up events
-  startExamBtn.addEventListener('click', startExamPractice);
-  startMockExamBtn.addEventListener('click', () => {
-  window.location.href = '/mock';
-});
-
-retryBtn.addEventListener('click', async () => {
-  transcriptEl.textContent = '';
-  feedbackEl.textContent = '';
-  setStatus('Retry: listen to the question again, then record.', 'ok');
-  await speakText(currentQuestion);
-});
-
-nextQuestionBtn.addEventListener('click', async () => {
-  if (!pendingNextQuestion) return;
-  currentQuestion = pendingNextQuestion;
-  lastCorrectedAnswerTarget = '';
-  readCorrectedBtn.disabled = true;
-  pendingNextQuestion = '';
-
-  questionEl.textContent = currentQuestion;
-  transcriptEl.textContent = '';
-  feedbackEl.textContent = '';
-  retryBtn.disabled = true;
-  nextQuestionBtn.disabled = true;
-
-  setStatus('Next question ready. Listen, then record.', 'ok');
-  await speakText(currentQuestion);
-});
-
-
-  readCorrectedBtn.addEventListener('click', async () => {
-    if (!lastCorrectedAnswerTarget) return;
-    await speakText(lastCorrectedAnswerTarget);
-  });
-
-  startBtn.addEventListener('click', startRecording);
-
-  stopBtn.addEventListener('click', async () => {
-    stopBtn.disabled = true;
-    const blob = await stopRecording();
-    console.log("Recorded blob:", blob?.type, blob?.size);
-
-
-    startBtn.disabled = false;
-    await processAudioBlob(blob);
-    stopBtn.disabled = false;
-  });
-
-  dictBtn.addEventListener('click', lookupDictionary);
-
-  dictInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      lookupDictionary();
-    }
-  });
-
-  window.addEventListener('DOMContentLoaded', loadUserPreferences);
-  if (difficultySel) difficultySel.addEventListener('change', scheduleSaveUserPreferences);
-  if (examLangSel) examLangSel.addEventListener('change', scheduleSaveUserPreferences);
-</script>
-
+  <!-- STATUS -->
+  <div id="status" class="muted" style="margin-top:15px;">Idle.</div>
+</div>
+
+<!-- This is the link for the javascript file that runs this html -->
+<script src="{{ url_for('static', filename='js/practice.js') }}"></script>
 </body>
 </html>
 
+
+<!-- The code for buttons was gotten from W3schools.com
+https://www.w3schools.com/html/html_buttons.asp -->

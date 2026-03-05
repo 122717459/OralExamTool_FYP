@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Developer Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+  <script>
+  const examLanguageData = {{ exam_language_dist|default([])|tojson }};
+  const examDifficultyData = {{ exam_difficulty_dist|default([])|tojson }};
+  const completionRate = {{ completion_rate|default(0) }};
+</script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="nav-left">
+    <span class="logo">Project FireBeak</span>
+  </div>
+<!-- Nav Bar with links to the main pages -->
+  <div class="nav-right">
+  <a href="{{ url_for('home') }}" class="nav-link">Practice</a>
+  <a href="{{ url_for('mock_exam_page') }}" class="nav-link">Mock Exam</a>
+  <a href="{{ url_for('developer_dashboard') }}" class="nav-link active">Developer</a>
+</div>
+</nav>
+
+<div class="container">
+<!-- This is the title for the page -->
+  <h1 class="page-title">Developer Dashboard</h1>
+
+  <!-- SYSTEM STATS -->
+  <div class="stats-grid">
+    <div class="card">
+      <h2>Total Users</h2>
+      <div>{{ total_users }}</div>
+    </div>
+
+    <div class="card">
+      <h2>Total Exams</h2>
+      <div>{{ total_exams }}</div>
+    </div>
+
+    <div class="card">
+      <h2>Completed Exams</h2>
+      <div>{{ completed_exams }}</div>
+    </div>
+
+    <div class="card">
+      <h2>In Progress</h2>
+      <div>{{ in_progress_exams }}</div>
+    </div>
+  </div>
+
+    <div class="card">
+  <h2>Analytics Overview</h2>
+
+  <div class="progress-container">
+    <div class="progress-bar" style="width: {{ completion_rate }}%;">
+      {{ completion_rate }}%
+    </div>
+  </div>
+
+  <p><strong>Average Questions Per Exam:</strong>
+    {{ (avg_questions|round(1)) if avg_questions is not none else "N/A" }}
+  </p>
+
+  <p><strong>Average Overall Band:</strong>
+    {{ (avg_band|round(1)) if avg_band is not none else "N/A" }}
+  </p>
+</div>
+
+    <div class="card">
+  <h2>Most Active Users</h2>
+  <ul>
+    {% for user_id, session_count in most_active_users %}
+      <li>User {{ user_id }} — {{ session_count }} exams</li>
+    {% endfor %}
+  </ul>
+</div>
+
+    <div class="card">
+  <h2>Exam Language Distribution</h2>
+  <canvas id="languageChart"></canvas>
+</div>
+
+<div class="card">
+  <h2>Exam Difficulty Distribution</h2>
+  <canvas id="difficultyChart"></canvas>
+</div>
+
+
+  <!-- USER PREFERENCES -->
+  <div class="card">
+    <h2>User Preferred Language</h2>
+    <ul>
+      {% for lang, count in language_distribution %}
+        <li>{{ lang }} — {{ count }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>User Preferred Difficulty</h2>
+    <ul>
+      {% for diff, count in difficulty_distribution %}
+        <li>{{ diff }} — {{ count }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <!-- ANALYSIS LOGS TABLE -->
+  <div class="card">
+    <h2>Analysis Logs</h2>
+
+    <table class="dev-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>User</th>
+          <th>Model</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="logsTableBody">
+      </tbody>
+    </table>
+  </div>
+
+
+<div class="card">
+  <h2>Recent Exam Sessions</h2>
+
+  <table class="dev-table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>User</th>
+        <th>Language</th>
+        <th>Difficulty</th>
+        <th>Status</th>
+        <th>Started</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in recent_sessions %}
+      <tr>
+        <td>{{ s.id }}</td>
+        <td>{{ s.user_id }}</td>
+        <td>{{ s.language }}</td>
+        <td>{{ s.difficulty }}</td>
+        <td>{{ s.status }}</td>
+        <td>{{ s.started_at }}</td>
+        <td>
+          <a href="{{ url_for('view_session', session_id=s.id) }}">
+            View
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<!-- This is the link to the javascript for this page -->
+<script src="{{ url_for('static', filename='js/developer.js') }}"></script>
+
+</body>
+</html>
+
+
+<!-- The code for buttons was gotten from W3schools.com
+https://www.w3schools.com/html/html_buttons.asp -->

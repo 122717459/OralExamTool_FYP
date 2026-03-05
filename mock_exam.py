@@ -41,7 +41,7 @@ EXAM_BLUEPRINT = [
     },
 ]
 
-
+# Creates a new mock exam session this prepares everything needed to run the exam
 def _new_exam_session(target_language: str, difficulty: str):
     # Expand blueprint into a question queue
     question_queue = []
@@ -65,7 +65,7 @@ def _new_exam_session(target_language: str, difficulty: str):
         # { section_id, question, transcript, corrected, score, ... }
     }
 
-
+# Creates a new exam session when the user presses start exam
 @mock_exam_bp.route("/api/mock/start", methods=["POST"])
 def start_mock_exam():
     data = request.get_json(force=True) or {}

@@ -1,0 +1,52 @@
+<!doctype html>
+<!-- This is where the developer can look in detail at one particular exam attempt and see everything that happened -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Session {{ session.id }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="nav-left">
+    <span class="logo">FireBeak</span>
+  </div>
+  <div class="nav-right">
+    <a href="{{ url_for('developer_dashboard') }}" class="nav-link">← Back</a>
+  </div>
+</nav>
+
+<div class="container">
+  <h1 class="page-title">Session {{ session.id }}</h1>
+
+  <div class="card">
+    <p><strong>User:</strong> {{ session.user_id }}</p>
+    <p><strong>Language:</strong> {{ session.language }}</p>
+    <p><strong>Difficulty:</strong> {{ session.difficulty }}</p>
+    <p><strong>Status:</strong> {{ session.status }}</p>
+    <p><strong>Started:</strong> {{ session.started_at }}</p>
+  </div>
+
+  {% for t in turns %}
+  <div class="card">
+    <h2>Question {{ t.question_number }} ({{ t.section }})</h2>
+
+    <p><strong>Question:</strong></p>
+    <p>{{ t.question_text }}</p>
+
+    <p><strong>Transcript:</strong></p>
+    <p>{{ t.transcript or "No answer" }}</p>
+
+    <p><strong>Overall Band:</strong> {{ t.overall_band }}</p>
+  </div>
+  {% endfor %}
+
+</div>
+
+</body>
+</html>
+
+
+<!-- The code for buttons was gotten from W3schools.com
+https://www.w3schools.com/html/html_buttons.asp -->

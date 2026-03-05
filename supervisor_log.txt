@@ -78,3 +78,10 @@
 2026-02-06T12:00:51.539420 | AI_EXAM_TURN_CREATED | id=81 ; model=gpt-4o-mini ; input_chars=57
 2026-02-11T10:03:07.367911 | AI_EXAM_TURN_CREATED | id=82 ; model=gpt-4o-mini ; input_chars=56
 2026-02-11T10:04:11.771342 | AI_EXAM_TURN_CREATED | id=83 ; model=gpt-4o-mini ; input_chars=59
+2026-03-03T16:03:00.641459 | AI_EXAM_TURN_CREATED | id=1 ; model=gpt-4o-mini ; input_chars=102
+2026-03-03T16:46:09.875420 | AI_EXAM_TURN_CREATED | id=2 ; model=gpt-4o-mini ; input_chars=50
+2026-03-03T16:48:22.235680 | AI_EXAM_TURN_CREATED | id=3 ; model=gpt-4o-mini ; input_chars=74
+2026-03-03T18:02:50.728295 | AI_EXAM_TURN_CREATED | id=4 ; model=gpt-4o-mini ; input_chars=41
+2026-03-03T18:03:43.428574 | AI_EXAM_TURN_CREATED | id=5 ; model=gpt-4o-mini ; input_chars=142
+2026-03-03T19:08:19.830018 | AI_EXAM_TURN_CREATED | id=6 ; model=gpt-4o-mini ; input_chars=41
+2026-03-03T20:05:11.849204 | AI_EXAM_TURN_CREATED | id=7 ; model=gpt-4o-mini ; input_chars=30
